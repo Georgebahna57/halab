@@ -4,6 +4,7 @@ import { normalizeSyrianTransaction, syrianBalanceAmount, syrianBalanceCurrency 
 import { attachFeeFields, attachExtraFeeFields, parseStoredFee, ALL_FEE_ACCOUNTS, isFeeAccountName, isAutoFeeTransaction, adjustAccountItemsForFees, resolveFeeAccountName, SHAMEL_FEE_ACCOUNT, type ParsedFee } from './fees';
 import { mergeAccountSummaries } from './accountMerge';
 import { INVERSE_RATE_CURRENCIES } from './valuationRates';
+import { safeSetItem } from './safeLocalStorage';
 import type {
   AppState,
   Currency,
@@ -60,8 +61,8 @@ export function loadState(): AppState {
   }
 }
 
-export function saveState(state: AppState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+export function saveState(state: AppState): boolean {
+  return safeSetItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 export function calcExchangeAmount(fromAmount: number, rate: number): number {

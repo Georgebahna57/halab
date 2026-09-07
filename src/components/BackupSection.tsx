@@ -134,6 +134,10 @@ export function BackupSection({ appState, valuationRates, isAdmin = false, onRes
     setSuccess(null);
     const meta = saveManualSnapshot(appState);
     refreshSnapshots();
+    if (!meta) {
+      setError('تعذّر حفظ اللقطة — مساحة التخزين ممتلئة. جرّب حذف لقطات أو نسخ يومية قديمة.');
+      return;
+    }
     setSuccess(`تم حفظ لقطة يدوية — ${meta.transactions} حركة`);
   }
 

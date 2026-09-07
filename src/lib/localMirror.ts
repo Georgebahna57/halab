@@ -1,13 +1,14 @@
 import type { AppState } from '../types';
 import { buildAppBackup, type AppBackup } from './backup';
+import { safeSetItem } from './safeLocalStorage';
 import { saveState } from './utils';
 import { todayIso } from './utils';
 
 const SNAPSHOT_INDEX_KEY = 'sandouk-nemr-snapshots-v1';
 const DAILY_PREFIX = 'sandouk-nemr-daily-';
 const LAST_DAILY_KEY = 'sandouk-last-daily-date';
-const MAX_SNAPSHOTS = 8;
-const MAX_DAILY_SNAPSHOTS = 7;
+const MAX_SNAPSHOTS = 4;
+const MAX_DAILY_SNAPSHOTS = 3;
 
 export type SnapshotReason = 'auto' | 'pre-delete' | 'pre-replace' | 'pre-import' | 'manual';
 
@@ -43,7 +44,7 @@ function readIndex(): SnapshotMeta[] {
 }
 
 function writeIndex(index: SnapshotMeta[]): void {
-  localStorage.setItem(SNAPSHOT_INDEX_KEY, JSON.stringify(index));
+  safeSetItem(SNAPSHOT_INDEX_KEY, JSON.stringify(index));
 }
 
 function pruneSnapshots(index: SnapshotMeta[]): SnapshotMeta[] {
@@ -52,6 +53,12 @@ function pruneSnapshots(index: SnapshotMeta[]): SnapshotMeta[] {
     localStorage.removeItem(snapshotKey(removed.id));
   }
   return kept;
+}
+
+function pruneDailySnapshots(keep = MAX_DAILY_SNAPSHOTS - 1): void {
+  for (const old of listDailySnapshotDates().slice(keep)) {
+    localStorage.removeItem(`${DAILY_PREFIX}${old}`);
+  }
 }
 
 /** آخر نسخة محلية — تُحدَّث بعد كل حفظ ناجح */
@@ -63,7 +70,7 @@ export function mirrorAppState(state: AppState): MirrorInfo {
     customers: state.customers.length,
     bills: state.bills.length,
   };
-  localStorage.setItem('sandouk-nemr-mirror-meta', JSON.stringify(info));
+  safeSetItem('sandouk-nemr-mirror-meta', JSON.stringify(info));
   return info;
 }
 
@@ -78,16 +85,19 @@ export function getMirrorInfo(): MirrorInfo {
 }
 
 /** لقطة قبل عملية خطرة (حذف / استبدال) */
-export function savePreDestructiveSnapshot(state: AppState, reason: Exclude<SnapshotReason, 'auto' | 'manual'>): SnapshotMeta {
+export function savePreDestructiveSnapshot(
+  state: AppState,
+  reason: Exclude<SnapshotReason, 'auto' | 'manual'>,
+): SnapshotMeta | null {
   return pushSnapshot(state, reason);
 }
 
 /** لقطة يدوية أو دورية */
-export function saveManualSnapshot(state: AppState): SnapshotMeta {
+export function saveManualSnapshot(state: AppState): SnapshotMeta | null {
   return pushSnapshot(state, 'manual');
 }
 
-function pushSnapshot(state: AppState, reason: SnapshotReason): SnapshotMeta {
+function pushSnapshot(state: AppState, reason: SnapshotReason): SnapshotMeta | null {
   const id = crypto.randomUUID();
   const savedAt = new Date().toISOString();
   const backup = buildAppBackup(state);
@@ -99,7 +109,10 @@ function pushSnapshot(state: AppState, reason: SnapshotReason): SnapshotMeta {
     customers: state.customers.length,
     bills: state.bills.length,
   };
-  localStorage.setItem(snapshotKey(id), JSON.stringify(backup));
+
+  pruneSnapshots(readIndex());
+  if (!safeSetItem(snapshotKey(id), JSON.stringify(backup))) return null;
+
   const next = pruneSnapshots([meta, ...readIndex()]);
   writeIndex(next);
   return meta;
@@ -123,11 +136,11 @@ export function maybeDailySnapshot(state: AppState): boolean {
   if (localStorage.getItem(LAST_DAILY_KEY) === today) return false;
   if (state.transactions.length + state.customers.length + state.bills.length === 0) return false;
 
-  localStorage.setItem(`${DAILY_PREFIX}${today}`, JSON.stringify(buildAppBackup(state)));
-  localStorage.setItem(LAST_DAILY_KEY, today);
+  pruneDailySnapshots();
+  if (!safeSetItem(`${DAILY_PREFIX}${today}`, JSON.stringify(buildAppBackup(state)))) return false;
 
-  const dates = listDailySnapshotDates();
-  for (const old of dates.slice(MAX_DAILY_SNAPSHOTS)) {
+  safeSetItem(LAST_DAILY_KEY, today);
+  for (const old of listDailySnapshotDates().slice(MAX_DAILY_SNAPSHOTS)) {
     localStorage.removeItem(`${DAILY_PREFIX}${old}`);
   }
   return true;
