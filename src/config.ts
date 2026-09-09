@@ -10,11 +10,12 @@ export interface AssetConfig {
   unit: string;
 }
 
+/** الصناديق النقدية الأساسية — كل صندوق يدعم جميع العملات */
 export const FUNDS: Fund[] = [
   { id: 'steelMax', name: 'ستيل ماكس', shortName: 'ستيل ماكس', accent: '#f59e0b' },
   { id: 'georgeAbuAyyoun', name: 'جورج ابو عيون', shortName: 'جورج', accent: '#3b82f6' },
-  { id: 'halabJadida', name: 'حلب الجديدة', shortName: 'حلب الجديدة', accent: '#10b981' },
   { id: 'moneyOut', name: 'موني آوت', shortName: 'موني آوت', accent: '#e11d48' },
+  { id: 'halabJadida', name: 'حلب الجديدة', shortName: 'حلب الجديدة', accent: '#10b981' },
   { id: 'marakiz', name: 'مراكز', shortName: 'مراكز', accent: '#06b6d4' },
 ];
 
@@ -114,6 +115,7 @@ export const CURRENCIES: AssetConfig[] = [
   { id: 'SILVER', label: 'فضة', symbol: 'غ', kind: 'weight', unit: 'غرام' },
 ];
 
+/** كل الصناديق النقدية تدعم جميع العملات (نقد + ذهب/فضة) */
 export function getFundCurrencies(_fundId: FundId): Currency[] {
   return CURRENCIES.map(c => c.id);
 }

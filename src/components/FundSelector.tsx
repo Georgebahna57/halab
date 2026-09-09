@@ -19,7 +19,7 @@ export function FundSelector({ funds, active, fundAccess, onChange }: Props) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-4">
       {funds.map(fund => {
         const selected = fund.id === active;
         const access = fundAccess[fund.id];
