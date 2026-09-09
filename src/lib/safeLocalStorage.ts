@@ -1,6 +1,6 @@
-const DAILY_PREFIX = 'sandouk-nemr-daily-';
-const SNAPSHOT_PREFIX = 'sandouk-nemr-snapshot-';
-const SNAPSHOT_INDEX_KEY = 'sandouk-nemr-snapshots-v1';
+const DAILY_PREFIX = 'sandouk-halab-daily-';
+const SNAPSHOT_PREFIX = 'sandouk-halab-snapshot-';
+const SNAPSHOT_INDEX_KEY = 'sandouk-halab-snapshots-v1';
 
 export function isQuotaExceededError(err: unknown): boolean {
   if (err instanceof DOMException) {
@@ -21,7 +21,7 @@ function collectKeys(prefix: string): string[] {
   return keys;
 }
 
-/** حذف النسخ الاحتياطية القديمة لتوفير مساحة — البيانات الأساسية (sandouk-nemr-v1) تبقى */
+/** حذف النسخ الاحتياطية القديمة لتوفير مساحة — البيانات الأساسية (sandouk-halab-v1) تبقى */
 export function freeLocalStorageSpace(level: 'daily' | 'snapshots'): void {
   if (level === 'daily') {
     for (const key of collectKeys(DAILY_PREFIX)) {

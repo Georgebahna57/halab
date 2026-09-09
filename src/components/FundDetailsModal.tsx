@@ -2,12 +2,7 @@ import { Info, MessageCircle, Users, Wallet, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { CURRENCIES, getFund } from '../config';
 import { isBalanceDisplayCurrency } from '../lib/syrianCurrency';
-import {
-  formatNemrRestoreDelta,
-  previewNemrBalanceRestore,
-} from '../lib/nemrBalanceRestore';
 import { formatAmount, formatDateAr, getFundTransactionStats } from '../lib/utils';
-import { NemrBalanceRestoreSection } from './NemrBalanceRestoreSection';
 import type { Customer, FundBalances, FundId, Transaction } from '../types';
 
 interface Props {
@@ -19,8 +14,6 @@ interface Props {
   todayPostedCount: number;
   whatsappDestinations?: string[];
   date: string;
-  canRestoreBalance?: boolean;
-  onRestoreBalance?: (tx: Transaction[]) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -33,8 +26,6 @@ export function FundDetailsModal({
   todayPostedCount,
   whatsappDestinations,
   date,
-  canRestoreBalance = false,
-  onRestoreBalance,
   onClose,
 }: Props) {
   const fund = getFund(fundId);
@@ -54,10 +45,6 @@ export function FundDetailsModal({
   });
 
   const whatsappList = (whatsappDestinations ?? []).filter(Boolean);
-
-  const nemrRef = fundId === 'nemr'
-    ? previewNemrBalanceRestore(transactions)
-    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
@@ -115,29 +102,6 @@ export function FundDetailsModal({
               </div>
             )}
           </div>
-
-          {nemrRef && canRestoreBalance && onRestoreBalance && nemrRef.needsRestore && (
-            <NemrBalanceRestoreSection
-              transactions={transactions}
-              onRestore={onRestoreBalance}
-              compact
-            />
-          )}
-
-          {nemrRef && (!canRestoreBalance || !nemrRef.needsRestore) && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs">
-              <p className="font-medium text-amber-300">مقارنة بالمرجع (قبل آخر تعديل)</p>
-              <p className="mt-1 text-slate-400">
-                دولار: فرق {formatNemrRestoreDelta('USD', nemrRef.deltaUsd)}
-              </p>
-              <p className="text-slate-400">
-                يورو: فرق {formatNemrRestoreDelta('EUR', nemrRef.deltaEur)}
-              </p>
-              {nemrRef.needsRestore && !canRestoreBalance && (
-                <p className="mt-1 text-amber-200/90">الرصيد لا يطابق المرجع — يتطلب صلاحية تعديل</p>
-              )}
-            </div>
-          )}
 
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2.5">

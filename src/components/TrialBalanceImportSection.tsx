@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function TrialBalanceImportSection({ onImport, busy = false }: Props) {
-  const [fundId, setFundId] = useState<FundId>('nemr');
+  const [fundId, setFundId] = useState<FundId>('steelMax');
   const [preview, setPreview] = useState<TrialBalanceImportAccount[] | null>(null);
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState<string | null>(null);

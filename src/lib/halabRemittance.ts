@@ -1,4 +1,4 @@
-import { getCurrencyLabel } from '../config';
+import { getCurrencyLabel, isMoneyOutFund } from '../config';
 import { formatValueWithUnit, todayIso } from './utils';
 import type { Currency, HalabRemittanceFields, Transaction } from '../types';
 
@@ -140,7 +140,7 @@ export function stampHalabRemittance<T extends Transaction | Transaction[]>(
   fields: HalabRemittanceFields | undefined,
 ): T {
   const apply = (tx: Transaction) => {
-    if (tx.fundId !== 'halabFleilat') return tx;
+    if (!isMoneyOutFund(tx.fundId)) return tx;
     if (!fields || !hasHalabRemittanceContent(fields)) {
       const { halabRemittance: _, ...rest } = tx;
       return rest as Transaction;

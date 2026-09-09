@@ -1,4 +1,4 @@
-import { CENTERS_FUND_ID, isBoxFund } from '../config';
+import { CENTERS_FUND_ID, DEFAULT_FUND_ID, isBoxFund, isMoneyOutFund } from '../config';
 import type { AccountBranchId, Customer, CustomerSummary, Fund, FundId, Transaction } from '../types';
 import { mergeAccountSummaries } from './accountMerge';
 import {
@@ -15,12 +15,12 @@ export const ACCOUNT_BRANCH_LABELS: Record<AccountBranchId, string> = {
 
 /** صندوق الحركات الداخلي لقسم الزبائن — لا يُعرض كتبعيّة للحساب */
 export function getCustomersLedgerFundId(boxFunds: Fund[]): FundId {
-  const f = boxFunds.find(b => b.id !== CENTERS_FUND_ID && b.id !== 'halabFleilat');
-  return f?.id ?? 'nemr';
+  const f = boxFunds.find(b => b.id !== CENTERS_FUND_ID && !isMoneyOutFund(b.id));
+  return f?.id ?? DEFAULT_FUND_ID;
 }
 
 export function customerBoxFundIds(boxFundIds: FundId[]): FundId[] {
-  return boxFundIds.filter(id => id !== CENTERS_FUND_ID && id !== 'halabFleilat');
+  return boxFundIds.filter(id => id !== CENTERS_FUND_ID && !isMoneyOutFund(id));
 }
 
 export function getCustomerAccountBranch(customer: Customer): AccountBranchId {
@@ -43,7 +43,7 @@ export function inferAccountBranch(
   for (const tx of transactions) {
     if ((tx.ledger ?? 'fund') !== 'account' || tx.party !== trimmed) continue;
     if (tx.fundId === CENTERS_FUND_ID) onCenters = true;
-    else if (isBoxFund(tx.fundId) && tx.fundId !== 'halabFleilat') onCustomers = true;
+    else if (isBoxFund(tx.fundId) && !isMoneyOutFund(tx.fundId)) onCustomers = true;
   }
 
   if (onCenters && !onCustomers) return 'centers';

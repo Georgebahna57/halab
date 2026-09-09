@@ -5,7 +5,7 @@ export const BACKUP_VERSION = 1;
 
 export interface AppBackup {
   version: number;
-  app: 'sandouk-nemr';
+  app: 'sandouk-halab';
   exportedAt: string;
   transactions: Transaction[];
   customers: Customer[];
@@ -16,7 +16,7 @@ export interface AppBackup {
 export function buildAppBackup(state: AppState, valuationRates?: ValuationRates): AppBackup {
   return {
     version: BACKUP_VERSION,
-    app: 'sandouk-nemr',
+    app: 'sandouk-halab',
     exportedAt: new Date().toISOString(),
     transactions: state.transactions,
     customers: state.customers,
@@ -49,7 +49,7 @@ export function parseAppBackup(raw: string): AppBackup {
     throw new Error('الملف ليس JSON صالح');
   }
   if (!isRecord(parsed)) throw new Error('صيغة النسخة الاحتياطية غير صالحة');
-  if (parsed.app !== 'sandouk-nemr') throw new Error('هذا الملف ليس نسخة احتياطية من صناديق');
+  if (parsed.app !== 'sandouk-halab') throw new Error('هذا الملف ليس نسخة احتياطية من صناديق');
   if (!Array.isArray(parsed.transactions) || !Array.isArray(parsed.customers) || !Array.isArray(parsed.bills)) {
     throw new Error('النسخة الاحتياطية ناقصة (حركات / حسابات / فواتير)');
   }

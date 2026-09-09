@@ -1,16 +1,11 @@
 import { Loader2, Wrench } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { BOX_FUNDS } from '../config';
+import { BOX_FUNDS, isMoneyOutFund } from '../config';
 import {
   getHalabUsdBalanceBreakdown,
   halabBalanceSideLabel,
 } from '../lib/halabBalance';
-import {
-  formatNemrRestoreDelta,
-  getRecentlyEditedNemrFundTransactions,
-  previewNemrBalanceRestore,
-} from '../lib/nemrBalanceRestore';
-import { computeBalances, formatDateAr, formatValueWithUnit, getFundTransactionStats } from '../lib/utils';
+import { computeBalances, formatValueWithUnit, getFundTransactionStats } from '../lib/utils';
 import type { AppState } from '../types';
 
 interface Props {
@@ -27,26 +22,18 @@ export function FundDataDiagnostic({ appState, onRepairHalab }: Props) {
     stats: getFundTransactionStats(appState.transactions, fund.id),
   }));
 
-  const halab = rows.find(r => r.fund.id === 'halabFleilat');
-  const halabBalances = halab ? computeBalances(appState.transactions, 'halabFleilat') : null;
+  const moneyOut = rows.find(r => r.fund.id === 'moneyOut');
+  const moneyOutBalances = moneyOut
+    ? computeBalances(appState.transactions, 'moneyOut')
+    : null;
   const usdBreakdown = useMemo(
     () => getHalabUsdBalanceBreakdown(appState.transactions),
     [appState.transactions],
   );
 
-  const halabHidden = halab
-    ? halab.stats.fundLedger - halab.stats.visibleFundLedger
-    : 0;
-
-  const nemrPreview = useMemo(
-    () => previewNemrBalanceRestore(appState.transactions),
-    [appState.transactions],
-  );
-
-  const recentNemrEdits = useMemo(
-    () => getRecentlyEditedNemrFundTransactions(appState.transactions),
-    [appState.transactions],
-  );
+  const moneyOutHidden = rows
+    .filter(r => isMoneyOutFund(r.fund.id))
+    .reduce((sum, r) => sum + (r.stats.fundLedger - r.stats.visibleFundLedger), 0);
 
   async function runRepair() {
     if (!onRepairHalab) return;
@@ -54,7 +41,7 @@ export function FundDataDiagnostic({ appState, onRepairHalab }: Props) {
     setRepairMsg(null);
     try {
       await onRepairHalab();
-      setRepairMsg('تم تطبيق إصلاح حلب — حدّث الرصيد');
+      setRepairMsg('تم تطبيق إصلاح موني آوت — حدّث الرصيد');
     } catch {
       setRepairMsg('فشل الإصلاح');
     } finally {
@@ -95,70 +82,29 @@ export function FundDataDiagnostic({ appState, onRepairHalab }: Props) {
         </table>
       </div>
 
-      <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-slate-300 space-y-1">
-        <p className="font-medium text-amber-200">أرصدة نمر — مقارنة بالمرجع</p>
-        <p>
-          دولار: {formatValueWithUnit(nemrPreview.currentUsd, 'USD')}
-          {' · '}مرجع {formatValueWithUnit(nemrPreview.targetUsd, 'USD')}
-          {' · '}فرق {formatNemrRestoreDelta('USD', nemrPreview.deltaUsd)}
-        </p>
-        <p>
-          يورو: {formatValueWithUnit(nemrPreview.currentEur, 'EUR')}
-          {' · '}مرجع {formatValueWithUnit(nemrPreview.targetEur, 'EUR')}
-          {' · '}فرق {formatNemrRestoreDelta('EUR', nemrPreview.deltaEur)}
-        </p>
-        {recentNemrEdits.length > 0 && (
-          <div className="mt-2 border-t border-slate-700/60 pt-2 text-[10px] text-slate-500 space-y-1">
-            <p className="font-medium text-slate-400">آخر حركات صندوق معدّلة:</p>
-            {recentNemrEdits.map(tx => {
-              const last = tx.editHistory![tx.editHistory!.length - 1];
-              return (
-                <p key={tx.id}>
-                  {formatDateAr(tx.date)} — {last.summary}
-                </p>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {halab && halab.stats.total === 0 && (
-        <p className="mt-3 text-xs text-rose-300">
-          لا توجد أي حركة مخزّنة لـ حلب - الفيلات في قاعدة البيانات.
-        </p>
-      )}
-      {halabHidden > 0 && (
+      {moneyOutHidden > 0 && (
         <p className="mt-3 text-xs text-amber-300">
-          وُجد {halabHidden} حركة صندوق لحلب كانت مخفية — يفترض أن تظهر بعد التحديث.
+          وُجد {moneyOutHidden} حركة صندوق لموني آوت كانت مخفية — يفترض أن تظهر بعد التحديث.
         </p>
       )}
 
-      {halabBalances && (
+      {moneyOutBalances && (
         <div className="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-xs text-slate-300 space-y-1">
-          <p className="font-medium text-sky-200">أرصدة حلب</p>
-          {halabBalances.SYP.balance !== 0 && (
+          <p className="font-medium text-sky-200">موني آوت</p>
+          {moneyOutBalances.USD.balance !== 0 && (
             <p>
-              سوري: {formatValueWithUnit(Math.abs(halabBalances.SYP.balance), 'SYP')} · {halabBalanceSideLabel('SYP', halabBalances.SYP.balance)}
+              دولار: {formatValueWithUnit(Math.abs(moneyOutBalances.USD.balance), 'USD')} · {halabBalanceSideLabel('USD', moneyOutBalances.USD.balance)}
             </p>
           )}
-          <p>
-            دولار: {formatValueWithUnit(Math.abs(halabBalances.USD.balance), 'USD')} · {halabBalanceSideLabel('USD', halabBalances.USD.balance)}
-          </p>
+          {moneyOutBalances.SYP.balance !== 0 && (
+            <p>
+              سوري: {formatValueWithUnit(Math.abs(moneyOutBalances.SYP.balance), 'SYP')} · {halabBalanceSideLabel('SYP', moneyOutBalances.SYP.balance)}
+            </p>
+          )}
           <div className="mt-2 border-t border-slate-700/60 pt-2 text-[10px] text-slate-500 space-y-0.5">
-            <p>افتتاح: {formatValueWithUnit(usdBreakdown.openingBalance, 'USD')} ({usdBreakdown.openingTxCount} حركة)</p>
-            <p>عمليات: {formatValueWithUnit(usdBreakdown.opsDelta, 'USD')} (دفع − استلام: {formatValueWithUnit(usdBreakdown.opsPayments, 'USD')} − {formatValueWithUnit(usdBreakdown.opsReceipts, 'USD')})</p>
-            <p>المجموع: {formatValueWithUnit(usdBreakdown.totalBalance, 'USD')} = افتتاح + عمليات</p>
+            <p>افتتاح دولار: {formatValueWithUnit(usdBreakdown.openingBalance, 'USD')} ({usdBreakdown.openingTxCount} حركة)</p>
+            <p>عمليات: {formatValueWithUnit(usdBreakdown.opsDelta, 'USD')}</p>
           </div>
-          {usdBreakdown.openingTxCount === 0 && (
-            <p className="text-amber-300">
-              ⚠ لا يوجد رصيد افتتاحي دولار — سجّله من «رصيد افتتاحي» (245,542 لهم)
-            </p>
-          )}
-          {usdBreakdown.openingPayments > 0 && usdBreakdown.openingReceipts === 0 && (
-            <p className="text-amber-300">
-              ⚠ الافتتاح مسجّل «دفع» — اضغط إصلاح لتحويله «استلام»
-            </p>
-          )}
         </div>
       )}
 
@@ -170,7 +116,7 @@ export function FundDataDiagnostic({ appState, onRepairHalab }: Props) {
           className="mt-3 flex items-center gap-2 rounded-xl border border-sky-500/40 px-3 py-2 text-xs text-sky-200 hover:bg-sky-500/10 disabled:opacity-60"
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
-          إصلاح أرصدة حلب الآن
+          إصلاح أرصدة موني آوت الآن
         </button>
       )}
       {repairMsg && (

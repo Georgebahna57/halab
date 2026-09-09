@@ -118,7 +118,7 @@ export function EditTransactionModal({ leadId, allTransactions, onSave, onClose 
   const [feeEditor, setFeeEditor] = useState(() => feeEditorFromParsed(resolveTransactionFee(lead ?? clicked)));
   const [extraFeeEditor, setExtraFeeEditor] = useState(() => feeEditorFromParsed(resolveTransactionExtraFee(lead ?? clicked)));
   const [note, setNote] = useState(lead?.note ?? clicked?.note ?? '');
-  const showHalabFields = isHalabFleilatFund((lead ?? clicked)?.fundId ?? 'nemr');
+  const showHalabFields = isHalabFleilatFund((lead ?? clicked)?.fundId ?? 'steelMax');
   const [halabRemittance, setHalabRemittance] = useState<HalabRemittanceFields>(() => (
     halabRemittanceFromTransaction(clicked)
   ));

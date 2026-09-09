@@ -4,8 +4,8 @@ import { safeSetItem } from './safeLocalStorage';
 import { saveState } from './utils';
 import { todayIso } from './utils';
 
-const SNAPSHOT_INDEX_KEY = 'sandouk-nemr-snapshots-v1';
-const DAILY_PREFIX = 'sandouk-nemr-daily-';
+const SNAPSHOT_INDEX_KEY = 'sandouk-halab-snapshots-v1';
+const DAILY_PREFIX = 'sandouk-halab-daily-';
 const LAST_DAILY_KEY = 'sandouk-last-daily-date';
 const MAX_SNAPSHOTS = 4;
 const MAX_DAILY_SNAPSHOTS = 3;
@@ -29,7 +29,7 @@ export type MirrorInfo = {
 };
 
 function snapshotKey(id: string): string {
-  return `sandouk-nemr-snapshot-${id}`;
+  return `sandouk-halab-snapshot-${id}`;
 }
 
 function readIndex(): SnapshotMeta[] {
@@ -70,13 +70,13 @@ export function mirrorAppState(state: AppState): MirrorInfo {
     customers: state.customers.length,
     bills: state.bills.length,
   };
-  safeSetItem('sandouk-nemr-mirror-meta', JSON.stringify(info));
+  safeSetItem('sandouk-halab-mirror-meta', JSON.stringify(info));
   return info;
 }
 
 export function getMirrorInfo(): MirrorInfo {
   try {
-    const raw = localStorage.getItem('sandouk-nemr-mirror-meta');
+    const raw = localStorage.getItem('sandouk-halab-mirror-meta');
     if (!raw) return { savedAt: null, transactions: 0, customers: 0, bills: 0 };
     return JSON.parse(raw) as MirrorInfo;
   } catch {
@@ -189,7 +189,7 @@ export function recoverFromLocalMirror(): { state: AppState; savedAt: string } |
   const info = getMirrorInfo();
   if (!info.savedAt || info.transactions + info.customers + info.bills === 0) return null;
   try {
-    const raw = localStorage.getItem('sandouk-nemr-v1');
+    const raw = localStorage.getItem('sandouk-halab-v1');
     if (!raw) return null;
     const parsed = JSON.parse(raw) as AppState;
     return { state: parsed, savedAt: info.savedAt };

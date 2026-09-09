@@ -36,7 +36,7 @@ export function LoginScreen({ onSuccess }: Props) {
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-4 py-8">
       <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-amber-400">صناديق</h1>
+        <h1 className="text-2xl font-bold text-amber-400">حلب</h1>
         <p className="mt-2 text-sm text-slate-400">سجّل دخولك للمتابعة</p>
       </div>
 

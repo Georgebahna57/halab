@@ -11,13 +11,11 @@ export interface AssetConfig {
 }
 
 export const FUNDS: Fund[] = [
-  { id: 'nemr', name: 'صندوق نمر', shortName: 'نمر', accent: '#f59e0b' },
-  { id: 'tiger', name: 'صندوق تايغر', shortName: 'تايغر', accent: '#f97316' },
-  { id: 'aura', name: 'صندوق اورا', shortName: 'اورا', accent: '#8b5cf6' },
-  { id: 'zalqa', name: 'صندوق زلقا', shortName: 'زلقا', accent: '#10b981' },
-  { id: 'george', name: 'صندوق جورج', shortName: 'جورج', accent: '#3b82f6' },
+  { id: 'steelMax', name: 'ستيل ماكس', shortName: 'ستيل ماكس', accent: '#f59e0b' },
+  { id: 'georgeAbuAyyoun', name: 'جورج ابو عيون', shortName: 'جورج', accent: '#3b82f6' },
+  { id: 'halabJadida', name: 'حلب الجديدة', shortName: 'حلب الجديدة', accent: '#10b981' },
+  { id: 'moneyOut', name: 'موني آوت', shortName: 'موني آوت', accent: '#e11d48' },
   { id: 'marakiz', name: 'مراكز', shortName: 'مراكز', accent: '#06b6d4' },
-  { id: 'halabFleilat', name: 'حلب - الفيلات', shortName: 'حلب', accent: '#e11d48' },
 ];
 
 /** معرّف فرع المراكز — ليس صندوقاً نقدياً */
@@ -26,12 +24,77 @@ export const CENTERS_FUND_ID: FundId = 'marakiz';
 /** صناديق نقدية فقط (بدون مراكز) */
 export const BOX_FUNDS: Fund[] = FUNDS.filter(f => f.id !== CENTERS_FUND_ID);
 
+export const DEFAULT_FUND_ID: FundId = 'steelMax';
+
+export function getFund(id: FundId) {
+  return FUNDS.find(f => f.id === id) ?? FUNDS[0];
+}
+
 export function isBoxFund(fundId: FundId): boolean {
   return fundId !== CENTERS_FUND_ID;
 }
 
 export function isCentersFund(fundId: FundId): boolean {
   return fundId === CENTERS_FUND_ID;
+}
+
+export function isMoneyOutFund(fundId: FundId): boolean {
+  return fundId === 'moneyOut';
+}
+
+/** @deprecated */
+export function isHalabFleilatFund(fundId: FundId): boolean {
+  return isMoneyOutFund(fundId);
+}
+
+export function isMoneyOutLinkedAccountName(name: string): boolean {
+  return name.trim() === 'موني آوت';
+}
+
+/** @deprecated */
+export function isHalabLinkedAccountName(name: string): boolean {
+  return isMoneyOutLinkedAccountName(name);
+}
+
+export function isMoneyOutFundPartyName(party: string): boolean {
+  const trimmed = party.trim();
+  return trimmed === 'موني آوت' || trimmed === getFund('moneyOut').name;
+}
+
+/** @deprecated */
+export function isHalabFundPartyName(party: string): boolean {
+  return isMoneyOutFundPartyName(party);
+}
+
+export function canRegisterCustomerName(name: string, fundId: FundId): boolean {
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+  if (isMoneyOutFund(fundId) && isMoneyOutLinkedAccountName(trimmed)) return true;
+  return !isFundAccountName(trimmed);
+}
+
+export function getFundAccountName(fundId: FundId): string {
+  const fund = getFund(fundId);
+  if (isMoneyOutFund(fundId)) return 'موني آوت';
+  return fund.name;
+}
+
+export function defaultCounterpartyForFund(fundId: FundId, accountNames: readonly string[]): string {
+  if (!isMoneyOutFund(fundId)) return '';
+  const preferred = 'موني آوت';
+  return accountNames.includes(preferred) ? preferred : '';
+}
+
+const FUND_ACCOUNT_NAMES = new Set(
+  FUNDS.flatMap(f => {
+    if (f.id === 'moneyOut') return [f.name, 'موني آوت', f.shortName];
+    if (f.id === 'marakiz') return [f.name, 'صندوق مراكز'];
+    return [f.name, f.shortName];
+  }),
+);
+
+export function isFundAccountName(name: string): boolean {
+  return FUND_ACCOUNT_NAMES.has(name.trim());
 }
 
 export const CURRENCIES: AssetConfig[] = [
@@ -51,58 +114,8 @@ export const CURRENCIES: AssetConfig[] = [
   { id: 'SILVER', label: 'فضة', symbol: 'غ', kind: 'weight', unit: 'غرام' },
 ];
 
-export function getFund(id: FundId) {
-  return FUNDS.find(f => f.id === id) ?? FUNDS[0];
-}
-
-export function isHalabFleilatFund(fundId: FundId): boolean {
-  return fundId === 'halabFleilat';
-}
-
-/** حساب «حلب» — مرتبط بصندوق الفيلات ويظهر ضمن الحسابات */
-export function isHalabLinkedAccountName(name: string): boolean {
-  return name.trim() === getFund('halabFleilat').shortName;
-}
-
-/** أسماء حساب الصندوق لحلب — الحالي والقديم */
-export function isHalabFundPartyName(party: string): boolean {
-  const trimmed = party.trim();
-  const fund = getFund('halabFleilat');
-  return trimmed === fund.shortName || trimmed === fund.name;
-}
-
-/** هل يمكن تسجيل حساب زبون بهالاسم ضمن الصندوق؟ */
-export function canRegisterCustomerName(name: string, fundId: FundId): boolean {
-  const trimmed = name.trim();
-  if (!trimmed) return false;
-  if (fundId === 'halabFleilat' && isHalabLinkedAccountName(trimmed)) return true;
-  return !isFundAccountName(trimmed);
-}
-
-/** اسم حساب الصندوق الافتراضي — رصيد الصندوق = رصيد هالحساب فقط */
-export function getFundAccountName(fundId: FundId): string {
-  const fund = getFund(fundId);
-  if (fundId === 'halabFleilat') return fund.shortName;
-  return fund.name;
-}
-
-/** الطرف/الحساب الافتراضي عند إضافة حركة — حلب لصندوق الفيلات إذا موجود */
-export function defaultCounterpartyForFund(fundId: FundId, accountNames: readonly string[]): string {
-  if (!isHalabFleilatFund(fundId)) return '';
-  const preferred = getFund(fundId).shortName;
-  return accountNames.includes(preferred) ? preferred : '';
-}
-
-const FUND_ACCOUNT_NAMES = new Set(
-  FUNDS.flatMap(f => {
-    if (f.id === 'halabFleilat') return [f.shortName, f.name];
-    if (f.id === 'marakiz') return [f.name, 'صندوق مراكز'];
-    return [f.name];
-  }),
-);
-
-export function isFundAccountName(name: string): boolean {
-  return FUND_ACCOUNT_NAMES.has(name.trim());
+export function getFundCurrencies(_fundId: FundId): Currency[] {
+  return CURRENCIES.map(c => c.id);
 }
 
 export function getAsset(currency: Currency) {
