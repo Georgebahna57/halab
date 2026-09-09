@@ -52,6 +52,10 @@ alter table transactions enable row level security;
 alter table bills enable row level security;
 alter table customers enable row level security;
 
+drop policy if exists "authenticated full access transactions" on transactions;
+drop policy if exists "authenticated full access bills" on bills;
+drop policy if exists "authenticated full access customers" on customers;
+
 create policy "authenticated full access transactions"
   on transactions for all to authenticated using (true) with check (true);
 
