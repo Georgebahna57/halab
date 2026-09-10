@@ -115,6 +115,7 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
   const stateRef = useRef(state);
   const syncingRef = useRef(false);
   const fingerprintRef = useRef<string | null>(null);
+  const lastPollAtRef = useRef(0);
   stateRef.current = state;
   syncingRef.current = syncing;
 
@@ -140,24 +141,9 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
         }
 
         if (!cancelled) {
-          const { transactions: nsypFixed, changed: repairedNsyp } = repairNsypToSypTransactions(cloud.transactions);
-          const { transactions: repaired, changed: repairedHalab } = repairHalabFundTransactions(nsypFixed);
-          const { transactions: afterOpening, changed: repairedOpening } = runAllHalabRepairs(repaired);
-          const { transactions: withBackfill, changed } = backfillLinkedAccountFields(afterOpening);
-          const leadIds = getFeeSyncLeadIds(withBackfill);
-          const feeSync = mergeFeeSync(withBackfill, leadIds);
-          const nextState = { ...cloud, transactions: feeSync.transactions };
-
-          if (repairedNsyp.length || repairedHalab.length || repairedOpening.length || changed.length || feeSync.upsert.length || feeSync.removeIds.length) {
-            if (feeSync.removeIds.length) {
-              await removeTransactions(feeSync.removeIds);
-            }
-            const toUpsert = [...repairedNsyp, ...repairedHalab, ...repairedOpening, ...changed, ...feeSync.upsert];
-            if (toUpsert.length) await upsertTransactions(toUpsert);
-          }
-
-          setState(nextState);
-          mirrorAppState(nextState);
+          // تحميل البيانات كما هي — الإصلاحات التلقائية من زر الإدارة فقط (تجنّب حلقة تحديث بين الأجهزة)
+          setState(cloud);
+          mirrorAppState(cloud);
           try {
             const fp = await fetchDataFingerprint();
             fingerprintRef.current = fingerprintKey(fp);
@@ -192,6 +178,9 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
 
     async function pollRemote() {
       if (cancelled || syncingRef.current || document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastPollAtRef.current < 5_000) return;
+      lastPollAtRef.current = now;
       try {
         const fp = await fetchDataFingerprint();
         const key = fingerprintKey(fp);
@@ -219,7 +208,7 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
       }
     }
 
-    const timer = window.setInterval(() => { void pollRemote(); }, 30_000);
+    const timer = window.setInterval(() => { void pollRemote(); }, 60_000);
     const onVisible = () => { void pollRemote(); };
     document.addEventListener('visibilitychange', onVisible);
 

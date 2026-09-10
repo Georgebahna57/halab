@@ -7,17 +7,10 @@ import './index.css';
 
 initDisplayMode();
 
+// تسجيل Service Worker بدون إعادة تحميل تلقائية — تفادي حلقة تحديث على بعض الأجهزة/الشبكات
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=3').then(reg => {
-      reg.update();
-    }).catch(() => {});
-
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (sessionStorage.getItem('sw-reloaded')) return;
-      sessionStorage.setItem('sw-reloaded', '1');
-      window.location.reload();
-    });
+    navigator.serviceWorker.register('/sw.js?v=4').catch(() => {});
   });
 }
 

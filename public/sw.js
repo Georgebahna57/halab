@@ -1,4 +1,4 @@
-const CACHE = 'sandouk-static-v3';
+const CACHE = 'sandouk-static-v4';
 const PRECACHE = ['/icon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
