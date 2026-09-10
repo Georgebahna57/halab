@@ -7,10 +7,10 @@ import './index.css';
 
 initDisplayMode();
 
-// تسجيل Service Worker بدون إعادة تحميل تلقائية — تفادي حلقة تحديث على بعض الأجهزة/الشبكات
+// إزالة Service Worker القديم — كان يسبب حلقة تحديث وتسجيل خروج على شبكات بطيئة (سوريا)
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=4').catch(() => {});
+  void navigator.serviceWorker.getRegistrations().then(regs => {
+    for (const reg of regs) void reg.unregister();
   });
 }
 
