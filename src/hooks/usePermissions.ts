@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { FUNDS, isBoxFund } from '../config';
 import {
@@ -16,32 +16,37 @@ import {
 import type { FundId, Transaction } from '../types';
 
 export function usePermissions(user: User | null) {
+  const userId = user?.id ?? null;
+  const loadedForUserRef = useRef<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [permissions, setPermissions] = useState<Partial<Record<FundId, 'edit' | 'view'>>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    if (!user) {
+    if (!user || !userId) {
+      loadedForUserRef.current = null;
       setProfile(null);
       setPermissions({});
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const isRefresh = loadedForUserRef.current === userId;
+    if (!isRefresh) setLoading(true);
     setError(null);
     try {
       const p = await ensureProfile(user);
       const perms = p.isAdmin ? {} : await fetchMyPermissions(user.id);
       setProfile(p);
       setPermissions(perms);
+      loadedForUserRef.current = userId;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'فشل تحميل الصلاحيات');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, userId]);
 
   useEffect(() => {
     reload();

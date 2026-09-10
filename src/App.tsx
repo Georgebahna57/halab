@@ -114,6 +114,7 @@ export default function App({ user, onLogout }: Props) {
   const prevPendingCountRef = useRef<number | null>(null);
   const navRestoredRef = useRef(false);
   const dailyBackupDoneRef = useRef(false);
+  const initialLoadDoneRef = useRef(false);
   const [txFilters, setTxFilters] = useState<TransactionFilters>({});
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const [fundWhatsApp, setFundWhatsApp] = useState<FundWhatsAppMap>({});
@@ -534,7 +535,8 @@ export default function App({ user, onLogout }: Props) {
     );
   }
 
-  if (permsLoading || dataLoading) {
+  if ((permsLoading || dataLoading) && !initialLoadDoneRef.current) {
+    if (!permsLoading && !dataLoading) initialLoadDoneRef.current = true;
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3">
         <Loader2 className="animate-spin text-amber-400" size={32} />
@@ -542,6 +544,7 @@ export default function App({ user, onLogout }: Props) {
       </div>
     );
   }
+  initialLoadDoneRef.current = true;
 
   if (visibleBoxFunds.length === 0 && !canAccessAccountsSection) {
     return (

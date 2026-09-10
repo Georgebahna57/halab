@@ -33,8 +33,10 @@ function SessionLoader({ message }: { message: string }) {
 export function AuthGate() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
-  const [reconnecting, setReconnecting] = useState(false);
+  const [sessionWarning, setSessionWarning] = useState(false);
   const userRef = useRef<User | null>(null);
+  const explicitLogoutRef = useRef(false);
+  const recoveryBusyRef = useRef(false);
   userRef.current = user;
 
   useEffect(() => {
@@ -44,6 +46,18 @@ export function AuthGate() {
     }
 
     let cancelled = false;
+
+    async function tryRecoverSession(): Promise<User | null> {
+      if (recoveryBusyRef.current) return userRef.current;
+      recoveryBusyRef.current = true;
+      setSessionWarning(true);
+      try {
+        return await recoverSessionUser(supabase!, { attempts: 6, delayMs: 2500 });
+      } finally {
+        recoveryBusyRef.current = false;
+        if (!cancelled) setSessionWarning(false);
+      }
+    }
 
     async function bootstrap() {
       const recovered = await recoverSessionUser(supabase!, { attempts: 5, delayMs: 2000 });
@@ -56,28 +70,33 @@ export function AuthGate() {
     void bootstrap();
 
     const { data: listener } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session) => {
+      if (explicitLogoutRef.current) return;
+
       if (session?.user) {
         setUser(session.user);
-        setReconnecting(false);
+        setSessionWarning(false);
         return;
       }
 
-      // لا تسجّل خروج فوراً — انقطاع الشبكة أو تحديث التوكن قد يمرّ بلحظة بلا جلسة
       const hadUser = userRef.current !== null;
-      if (!hadUser && (event === 'INITIAL_SESSION' || event === 'SIGNED_OUT')) {
+      if (!hadUser) {
         setUser(null);
-        setReconnecting(false);
         return;
       }
 
-      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-        setReconnecting(true);
-        void recoverSessionUser(supabase!, { attempts: 3, delayMs: 2000 }).then(recovered => {
-          if (cancelled) return;
+      // ابقَ داخل التطبيق — لا تسجّل خروج فوراً على الشبكات البطيئة
+      void tryRecoverSession().then(recovered => {
+        if (cancelled || explicitLogoutRef.current) return;
+        if (recovered) {
           setUser(recovered);
-          setReconnecting(false);
-        });
-      }
+          return;
+        }
+        if (event === 'SIGNED_OUT') {
+          void recoverSessionUser(supabase!, { attempts: 4, delayMs: 3000 }).then(secondTry => {
+            if (!cancelled && !explicitLogoutRef.current) setUser(secondTry);
+          });
+        }
+      });
     });
 
     return () => {
@@ -87,30 +106,38 @@ export function AuthGate() {
   }, []);
 
   async function handleLogout() {
+    explicitLogoutRef.current = true;
     if (supabase) await supabase.auth.signOut();
     setUser(null);
-    setReconnecting(false);
+    setSessionWarning(false);
+    explicitLogoutRef.current = false;
   }
 
   if (!isSupabaseConfigured) return <SetupRequired />;
 
-  if (checking || reconnecting) {
-    return (
-      <SessionLoader
-        message={reconnecting ? 'جاري استعادة الجلسة — انتظر قليلاً' : 'جاري الاتصال بالسحابة...'}
-      />
-    );
+  if (checking && !user) {
+    return <SessionLoader message="جاري الاتصال بالسحابة..." />;
   }
 
   if (!user) {
     return (
       <LoginScreen
         onSuccess={() => {
-          void recoverSessionUser(supabase!, { attempts: 2, delayMs: 500 }).then(setUser);
+          void recoverSessionUser(supabase!, { attempts: 3, delayMs: 800 }).then(setUser);
         }}
       />
     );
   }
 
-  return <App user={user} onLogout={handleLogout} />;
+  return (
+    <>
+      {sessionWarning && (
+        <div className="fixed inset-x-0 top-0 z-[100] flex items-center justify-center gap-2 bg-slate-900/95 px-4 py-2 text-xs text-amber-300 shadow-lg">
+          <Loader2 size={14} className="animate-spin" />
+          جاري استعادة الاتصال — انتظر قليلاً
+        </div>
+      )}
+      <App user={user} onLogout={handleLogout} />
+    </>
+  );
 }

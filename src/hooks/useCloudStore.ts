@@ -116,6 +116,7 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
   const syncingRef = useRef(false);
   const fingerprintRef = useRef<string | null>(null);
   const lastPollAtRef = useRef(0);
+  const readyAtRef = useRef(0);
   stateRef.current = state;
   syncingRef.current = syncing;
 
@@ -150,6 +151,7 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
           } catch {
             fingerprintRef.current = null;
           }
+          readyAtRef.current = Date.now();
         }
       } catch (err) {
         if (!cancelled) {
@@ -178,8 +180,10 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
 
     async function pollRemote() {
       if (cancelled || syncingRef.current || document.visibilityState !== 'visible') return;
+      if (!navigator.onLine) return;
       const now = Date.now();
-      if (now - lastPollAtRef.current < 5_000) return;
+      if (readyAtRef.current && now - readyAtRef.current < 90_000) return;
+      if (now - lastPollAtRef.current < 10_000) return;
       lastPollAtRef.current = now;
       try {
         const fp = await fetchDataFingerprint();
@@ -208,7 +212,7 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
       }
     }
 
-    const timer = window.setInterval(() => { void pollRemote(); }, 60_000);
+    const timer = window.setInterval(() => { void pollRemote(); }, 120_000);
     const onVisible = () => { void pollRemote(); };
     document.addEventListener('visibilitychange', onVisible);
 
