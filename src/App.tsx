@@ -157,6 +157,8 @@ export default function App({ user, onLogout }: Props) {
     state,
     loading: dataLoading,
     syncing,
+    flushingQueue,
+    pendingSyncCount,
     error: syncError,
     addTransaction,
     updateTransaction,
@@ -605,6 +607,13 @@ export default function App({ user, onLogout }: Props) {
         {permsSoftWarning && !permsError && (
           <div className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
             اتصال ضعيف — جاري تحديث الصلاحيات في الخلفية...
+          </div>
+        )}
+        {pendingSyncCount > 0 && (
+          <div className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            {flushingQueue
+              ? `جاري رفع ${pendingSyncCount} عملية على السحابة...`
+              : `${pendingSyncCount} عملية بانتظار الرفع — سيتم الرفع تلقائياً عند عودة الاتصال`}
           </div>
         )}
         {(syncing || syncError || permsError) && (

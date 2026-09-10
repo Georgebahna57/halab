@@ -64,6 +64,15 @@ import {
 } from '../lib/trialBalanceImport';
 import { createCustomer, findCustomerForAccount } from '../lib/utils';
 import { getFund } from '../config';
+import {
+  enqueue,
+  flushOfflineQueue,
+  getQueueLength,
+  isRetryableError,
+  makeQueueItem,
+  type QueueStep,
+  type QueuedMutation,
+} from '../lib/offlineQueue';
 import { ensureSupabaseSession } from '../lib/sessionRecovery';
 import { supabase } from '../lib/supabase';
 import type { FundId } from '../types';
@@ -108,19 +117,51 @@ function mergeUniqueTransactions(existing: Transaction[], incoming: Transaction[
   return [...byId.values()];
 }
 
+function queueTxSync(opts: { removeIds?: string[]; upsert?: Transaction[] }): QueuedMutation {
+  const steps: QueueStep[] = [];
+  if (opts.removeIds?.length) steps.push({ type: 'removeTransactions', ids: opts.removeIds });
+  if (opts.upsert?.length) steps.push({ type: 'upsertTransactions', txs: opts.upsert });
+  return makeQueueItem(steps.length ? steps : [{ type: 'upsertTransactions', txs: [] }]);
+}
+
 export function useCloudStore(enabled: boolean, actor?: StoreActor) {
   const [state, setState] = useState<AppState>({ transactions: [], bills: [], customers: [] });
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remoteNotice, setRemoteNotice] = useState<string | null>(null);
+  const [pendingSyncCount, setPendingSyncCount] = useState(() => getQueueLength());
+  const [flushingQueue, setFlushingQueue] = useState(false);
   const stateRef = useRef(state);
   const syncingRef = useRef(false);
+  const flushingRef = useRef(false);
   const fingerprintRef = useRef<string | null>(null);
   const lastPollAtRef = useRef(0);
   const readyAtRef = useRef(0);
   stateRef.current = state;
   syncingRef.current = syncing;
+
+  const flushQueue = useCallback(async () => {
+    if (flushingRef.current || getQueueLength() === 0) return;
+    flushingRef.current = true;
+    setFlushingQueue(true);
+    try {
+      if (supabase) await ensureSupabaseSession(supabase);
+      await flushOfflineQueue(count => setPendingSyncCount(count));
+      try {
+        const fp = await fetchDataFingerprint();
+        fingerprintRef.current = fingerprintKey(fp);
+      } catch {
+        // تجاهل
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'فشل رفع العمليات المعلّقة');
+    } finally {
+      flushingRef.current = false;
+      setFlushingQueue(false);
+      setPendingSyncCount(getQueueLength());
+    }
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -178,12 +219,27 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
 
   useEffect(() => {
     if (!enabled || loading) return;
+    if (getQueueLength() > 0) {
+      setPendingSyncCount(getQueueLength());
+      void flushQueue();
+    }
+  }, [enabled, loading, flushQueue]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const onOnline = () => { void flushQueue(); };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [enabled, flushQueue]);
+
+  useEffect(() => {
+    if (!enabled || loading) return;
 
     let cancelled = false;
 
     async function pollRemote() {
       if (cancelled || syncingRef.current || document.visibilityState !== 'visible') return;
-      if (!navigator.onLine) return;
+      if (!navigator.onLine || getQueueLength() > 0) return;
       const now = Date.now();
       if (readyAtRef.current && now - readyAtRef.current < 90_000) return;
       if (now - lastPollAtRef.current < 10_000) return;
@@ -251,10 +307,11 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
     };
   }, [enabled, loading]);
 
-  const runSync = useCallback(async (fn: () => Promise<void>) => {
+  const runSync = useCallback(async (fn: () => Promise<void>, queueItem?: QueuedMutation) => {
     setSyncing(true);
     setError(null);
     try {
+      if (supabase) await ensureSupabaseSession(supabase);
       await fn();
       try {
         const fp = await fetchDataFingerprint();
@@ -263,35 +320,36 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
         // تجاهل
       }
     } catch (err) {
+      if (queueItem && isRetryableError(err)) {
+        enqueue(queueItem);
+        setPendingSyncCount(getQueueLength());
+        if (navigator.onLine) void flushQueue();
+        return;
+      }
       setError(err instanceof Error ? err.message : 'فشل الحفظ');
       throw err;
     } finally {
       setSyncing(false);
     }
-  }, []);
+  }, [flushQueue]);
 
   const addTransaction = useCallback(async (tx: Transaction | Transaction[]) => {
     const txs = toArray(tx).map(t => stampActor(normalizeSyrianTransaction(t) as Transaction, actor));
-    let previous: Transaction[] = [];
     let syncResult: FeeSyncResult = { transactions: [], upsert: [], removeIds: [] };
     setState(prev => {
-      previous = prev.transactions;
       const merged = mergeUniqueTransactions(txs, prev.transactions);
       const leadIds = collectFeeSyncLeadIds(merged, txs.map(t => t.id));
       syncResult = mergeFeeSync(merged, leadIds);
       return { ...prev, transactions: syncResult.transactions };
     });
-    try {
-      await runSync(async () => {
-        if (syncResult.removeIds.length) await removeTransactions(syncResult.removeIds);
-        const upsertIds = new Set(txs.map(t => t.id));
-        const feeUpsert = syncResult.upsert.filter(t => !upsertIds.has(t.id));
-        await upsertTransactions([...txs, ...feeUpsert]);
-      });
-    } catch {
-      setState(prev => ({ ...prev, transactions: previous }));
-      throw new Error('فشل الحفظ');
-    }
+    const upsertIds = new Set(txs.map(t => t.id));
+    const feeUpsert = syncResult.upsert.filter(t => !upsertIds.has(t.id));
+    const toUpsert = [...txs, ...feeUpsert];
+    const queueItem = queueTxSync({ removeIds: syncResult.removeIds, upsert: toUpsert });
+    await runSync(async () => {
+      if (syncResult.removeIds.length) await removeTransactions(syncResult.removeIds);
+      await upsertTransactions(toUpsert);
+    }, queueItem);
   }, [actor, runSync]);
 
   const updateTransaction = useCallback(async (id: string, patch: Partial<Transaction>) => {
@@ -309,11 +367,15 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
       syncResult = mergeFeeSync(patched, leadIds);
       return { ...prev, transactions: syncResult.transactions };
     });
+    const queueItem = queueTxSync({
+      removeIds: syncResult.removeIds,
+      upsert: mergeUniqueTransactions(upsertTxs, syncResult.upsert),
+    });
     await runSync(async () => {
       if (syncResult.removeIds.length) await removeTransactions(syncResult.removeIds);
       if (upsertTxs.length) await upsertTransactions(upsertTxs);
       if (syncResult.upsert.length) await upsertTransactions(syncResult.upsert);
-    });
+    }, queueItem);
   }, [runSync]);
 
   const approvePendingOperations = useCallback(async (
@@ -359,11 +421,15 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
       return { ...prev, transactions: syncResult.transactions };
     });
 
+    const queueItem = queueTxSync({
+      removeIds: syncResult.removeIds,
+      upsert: mergeUniqueTransactions(upsertTxs, syncResult.upsert),
+    });
     await runSync(async () => {
       if (syncResult.removeIds.length) await removeTransactions(syncResult.removeIds);
       if (upsertTxs.length) await upsertTransactions(upsertTxs);
       if (syncResult.upsert.length) await upsertTransactions(syncResult.upsert);
-    });
+    }, queueItem);
   }, [runSync]);
 
   const deleteTransaction = useCallback(async (id: string) => {
@@ -374,7 +440,10 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
       removeIds = getDeletionGroupIds(prev.transactions, id);
       return { ...prev, transactions: prev.transactions.filter(tx => !removeIds.includes(tx.id)) };
     });
-    await runSync(() => removeTransactions(removeIds));
+    await runSync(
+      () => removeTransactions(removeIds),
+      makeQueueItem({ type: 'removeTransactions', ids: removeIds }),
+    );
     if (tx && actor) {
       logAudit({
         userId: actor.userId,
@@ -400,12 +469,14 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
       syncResult = mergeFeeSync(merged, leadIds);
       return { ...prev, transactions: syncResult.transactions };
     });
+    const upsertIds = new Set(stamped.map(t => t.id));
+    const feeUpsert = syncResult.upsert.filter(t => !upsertIds.has(t.id));
+    const toUpsert = [...stamped, ...feeUpsert];
+    const queueItem = queueTxSync({ removeIds: syncResult.removeIds, upsert: toUpsert });
     await runSync(async () => {
       if (syncResult.removeIds.length) await removeTransactions(syncResult.removeIds);
-      const upsertIds = new Set(stamped.map(t => t.id));
-      const feeUpsert = syncResult.upsert.filter(t => !upsertIds.has(t.id));
-      await upsertTransactions([...stamped, ...feeUpsert]);
-    });
+      await upsertTransactions(toUpsert);
+    }, queueItem);
     if (actor) {
       logAudit({
         userId: actor.userId,
@@ -421,18 +492,27 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
 
   const addBill = useCallback(async (bill: Bill) => {
     setState(prev => ({ ...prev, bills: [bill, ...prev.bills] }));
-    await runSync(() => upsertBill(bill));
+    await runSync(
+      () => upsertBill(bill),
+      makeQueueItem({ type: 'upsertBill', bill }),
+    );
   }, [runSync]);
 
   const deleteBill = useCallback(async (id: string) => {
     savePreDestructiveSnapshot(stateRef.current, 'pre-delete');
     setState(prev => ({ ...prev, bills: prev.bills.filter(b => b.id !== id) }));
-    await runSync(() => removeBill(id));
+    await runSync(
+      () => removeBill(id),
+      makeQueueItem({ type: 'removeBill', id }),
+    );
   }, [runSync]);
 
   const addCustomer = useCallback(async (customer: Customer) => {
     setState(prev => ({ ...prev, customers: [customer, ...prev.customers] }));
-    await runSync(() => upsertCustomer(customer));
+    await runSync(
+      () => upsertCustomer(customer),
+      makeQueueItem({ type: 'upsertCustomer', customer }),
+    );
   }, [runSync]);
 
   const updateCustomer = useCallback(async (updated: Customer, previousName: string) => {
@@ -485,10 +565,12 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
 
     const changedTxs = [...changedTxMap.values()];
 
+    const customerSteps: QueueStep[] = [{ type: 'upsertCustomer', customer: customerToSave }];
+    if (changedTxs.length) customerSteps.push({ type: 'upsertTransactions', txs: changedTxs });
     await runSync(async () => {
       await upsertCustomer(customerToSave);
       if (changedTxs.length) await upsertTransactions(changedTxs);
-    });
+    }, makeQueueItem(customerSteps));
 
     if (actor) {
       const prevRecon = prevCustomer?.reconciliation?.throughDate;
@@ -589,10 +671,13 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
 
     const changedTxs = [...changedTxMap.values()];
 
+    const branchSteps: QueueStep[] = [];
+    if (customerToSave) branchSteps.push({ type: 'upsertCustomer', customer: customerToSave });
+    if (changedTxs.length) branchSteps.push({ type: 'upsertTransactions', txs: changedTxs });
     await runSync(async () => {
       if (customerToSave) await upsertCustomer(customerToSave);
       if (changedTxs.length) await upsertTransactions(changedTxs);
-    });
+    }, makeQueueItem(branchSteps.length ? branchSteps : [{ type: 'upsertTransactions', txs: [] }]));
 
     if (actor) {
       logAudit({
@@ -611,7 +696,10 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
     const customer = stateRef.current.customers.find(c => c.id === id);
     savePreDestructiveSnapshot(stateRef.current, 'pre-delete');
     setState(prev => ({ ...prev, customers: prev.customers.filter(c => c.id !== id) }));
-    await runSync(() => removeCustomer(id));
+    await runSync(
+      () => removeCustomer(id),
+      makeQueueItem({ type: 'removeCustomer', id }),
+    );
     if (customer && actor) {
       logAudit({
         userId: actor.userId,
@@ -651,7 +739,10 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
         )),
       };
     });
-    await runSync(() => patchTransactions(ids, { comments }));
+    await runSync(
+      () => patchTransactions(ids, { comments }),
+      makeQueueItem({ type: 'patchTransactions', ids, patch: { comments } }),
+    );
   }, [actor, runSync]);
 
   const claimTransaction = useCallback(async (id: string) => {
@@ -671,7 +762,10 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
         )),
       };
     });
-    await runSync(() => patchTransactions(ids, patch));
+    await runSync(
+      () => patchTransactions(ids, patch),
+      makeQueueItem({ type: 'patchTransactions', ids, patch }),
+    );
   }, [actor, runSync]);
 
   const releaseClaim = useCallback(async (id: string) => {
@@ -690,7 +784,10 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
         )),
       };
     });
-    await runSync(() => patchTransactions(ids, patch));
+    await runSync(
+      () => patchTransactions(ids, patch),
+      makeQueueItem({ type: 'patchTransactions', ids, patch }),
+    );
   }, [runSync]);
 
   const restoreBackup = useCallback(async (backup: AppBackup, mode: 'merge' | 'replace') => {
@@ -811,18 +908,26 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
       };
     });
 
+    const importSteps: QueueStep[] = [];
+    if (deleteIds.length) importSteps.push({ type: 'removeTransactions', ids: deleteIds });
+    for (const c of newCustomers) importSteps.push({ type: 'upsertCustomer', customer: c });
+    for (const u of customerUpdates) importSteps.push({ type: 'upsertCustomer', customer: u });
+    if (importTxs.length) importSteps.push({ type: 'upsertTransactions', txs: importTxs });
     await runSync(async () => {
       if (deleteIds.length) await removeTransactions(deleteIds);
       for (const c of newCustomers) await upsertCustomer(c);
       for (const u of customerUpdates) await upsertCustomer(u);
       if (importTxs.length) await upsertTransactions(importTxs);
-    });
+    }, makeQueueItem(importSteps.length ? importSteps : [{ type: 'upsertTransactions', txs: [] }]));
   }, [runSync]);
 
   return {
     state,
     loading,
     syncing,
+    flushingQueue,
+    pendingSyncCount,
+    flushQueue,
     error,
     remoteNotice,
     clearRemoteNotice: () => setRemoteNotice(null),
