@@ -64,6 +64,8 @@ import {
 } from '../lib/trialBalanceImport';
 import { createCustomer, findCustomerForAccount } from '../lib/utils';
 import { getFund } from '../config';
+import { ensureSupabaseSession } from '../lib/sessionRecovery';
+import { supabase } from '../lib/supabase';
 import type { FundId } from '../types';
 
 const MIGRATED_KEY = 'sandouk-cloud-migrated';
@@ -129,6 +131,7 @@ export function useCloudStore(enabled: boolean, actor?: StoreActor) {
       setLoading(true);
       setError(null);
       try {
+        if (supabase) await ensureSupabaseSession(supabase);
         let cloud = await fetchAppState();
         const local = loadState();
         const hasLocal = local.transactions.length + local.bills.length + local.customers.length > 0;

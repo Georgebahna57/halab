@@ -13,15 +13,32 @@ import {
   type FundAccess,
   type UserProfile,
 } from '../lib/permissions';
+import { ensureSupabaseSession } from '../lib/sessionRecovery';
+import { supabase } from '../lib/supabase';
 import type { FundId, Transaction } from '../types';
+
+const RETRY_DELAY_MS = 15_000;
 
 export function usePermissions(user: User | null) {
   const userId = user?.id ?? null;
   const loadedForUserRef = useRef<string | null>(null);
+  const profileRef = useRef<UserProfile | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [permissions, setPermissions] = useState<Partial<Record<FundId, 'edit' | 'view'>>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [softWarning, setSoftWarning] = useState(false);
+
+  profileRef.current = profile;
+
+  const scheduleRetry = useCallback((reloadFn: () => Promise<void>) => {
+    if (retryTimerRef.current !== null) return;
+    retryTimerRef.current = window.setTimeout(() => {
+      retryTimerRef.current = null;
+      void reloadFn();
+    }, RETRY_DELAY_MS);
+  }, []);
 
   const reload = useCallback(async () => {
     if (!user || !userId) {
@@ -29,27 +46,63 @@ export function usePermissions(user: User | null) {
       setProfile(null);
       setPermissions({});
       setLoading(false);
+      setError(null);
+      setSoftWarning(false);
       return;
     }
 
     const isRefresh = loadedForUserRef.current === userId;
+    const hasCachedProfile = isRefresh && profileRef.current !== null;
+
     if (!isRefresh) setLoading(true);
-    setError(null);
+    if (!hasCachedProfile) {
+      setError(null);
+      setSoftWarning(false);
+    }
+
     try {
-      const p = await ensureProfile(user);
-      const perms = p.isAdmin ? {} : await fetchMyPermissions(user.id);
-      setProfile(p);
-      setPermissions(perms);
-      loadedForUserRef.current = userId;
+      if (supabase) await ensureSupabaseSession(supabase);
+
+      let lastErr: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const p = await ensureProfile(user);
+          const perms = p.isAdmin ? {} : await fetchMyPermissions(user.id);
+          setProfile(p);
+          setPermissions(perms);
+          loadedForUserRef.current = userId;
+          setError(null);
+          setSoftWarning(false);
+          return;
+        } catch (err) {
+          lastErr = err;
+          if (attempt < 2) {
+            if (supabase) await ensureSupabaseSession(supabase, { attempts: 2, delayMs: 3000 });
+            await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          }
+        }
+      }
+      throw lastErr;
     } catch (err) {
+      if (hasCachedProfile) {
+        setSoftWarning(true);
+        scheduleRetry(reload);
+        return;
+      }
       setError(err instanceof Error ? err.message : 'فشل تحميل الصلاحيات');
     } finally {
       setLoading(false);
     }
-  }, [user, userId]);
+  }, [user, userId, scheduleRetry]);
 
   useEffect(() => {
     reload();
+    return () => {
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
   }, [reload]);
 
   const fundAccess = useMemo(() => {
@@ -108,6 +161,7 @@ export function usePermissions(user: User | null) {
     canAccessAccountsSection,
     loading,
     error,
+    softWarning,
     isAdmin: profile?.isAdmin ?? false,
     canEditPast: profile?.canEditPast ?? false,
     getAccess,

@@ -149,6 +149,7 @@ export default function App({ user, onLogout }: Props) {
     canEditTx,
     loading: permsLoading,
     error: permsError,
+    softWarning: permsSoftWarning,
     isAdmin,
   } = usePermissions(user);
 
@@ -601,6 +602,11 @@ export default function App({ user, onLogout }: Props) {
             </button>
           </div>
         </div>
+        {permsSoftWarning && !permsError && (
+          <div className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            اتصال ضعيف — جاري تحديث الصلاحيات في الخلفية...
+          </div>
+        )}
         {(syncing || syncError || permsError) && (
           <div className={`mt-3 rounded-xl px-3 py-2 text-xs ${
             syncError || permsError ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-400'

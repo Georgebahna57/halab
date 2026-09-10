@@ -92,9 +92,36 @@ export async function recoverSessionUser(
   return null;
 }
 
+/** تأكيد وجود رمز صالح قبل طلبات API — مع إعادة المحاولة للشبكات البطيئة */
+export async function ensureSupabaseSession(
+  client: SupabaseClient,
+  opts?: { attempts?: number; delayMs?: number },
+): Promise<boolean> {
+  const attempts = opts?.attempts ?? 4;
+  const delayMs = opts?.delayMs ?? 2000;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const { data: { session } } = await client.auth.getSession();
+      if (session?.access_token) {
+        if (session.user) saveStickySession(session.user);
+        return true;
+      }
+
+      const { data: refreshed } = await client.auth.refreshSession();
+      if (refreshed.session?.access_token) {
+        if (refreshed.session.user) saveStickySession(refreshed.session.user);
+        return true;
+      }
+    } catch {
+      // شبكة بطيئة أو مقطوعة
+    }
+    if (i < attempts - 1) await sleep(delayMs);
+  }
+  return false;
+}
+
 /** محاولة تحديث جلسة Supabase بدون التأثير على واجهة المستخدم */
 export function refreshSessionInBackground(client: SupabaseClient): void {
-  void recoverSessionUser(client, { attempts: 3, delayMs: 3000, patient: true }).then(user => {
-    if (user) saveStickySession(user);
-  });
+  void ensureSupabaseSession(client, { attempts: 3, delayMs: 3000 });
 }
