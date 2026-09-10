@@ -9,7 +9,8 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(url, anonKey, {
       auth: {
         persistSession: true,
-        autoRefreshToken: true,
+        // تعطيل التحديث التلقائي — يمسح الجلسة على شبكات سوريا عند فشل التحديث
+        autoRefreshToken: false,
         detectSessionInUrl: false,
         storage: localStorage,
         storageKey: 'halab-auth-v1',
