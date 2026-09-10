@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Loader2, LogIn } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
 interface Props {
-  onSuccess: () => void;
+  onSuccess: (user: User) => void;
 }
 
 export function LoginScreen({ onSuccess }: Props) {
@@ -19,9 +20,10 @@ export function LoginScreen({ onSuccess }: Props) {
     setError(null);
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
-      onSuccess();
+      if (!data.user) throw new Error('no user');
+      onSuccess(data.user);
     } catch (err) {
       setError(
         err instanceof Error && err.message.toLowerCase().includes('invalid')

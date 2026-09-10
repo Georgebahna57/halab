@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { AuthChangeEvent, User } from '@supabase/supabase-js';
+import type { User } from '@supabase/supabase-js';
 import App from './App';
 import { LoginScreen } from './components/LoginScreen';
-import { recoverSessionUser } from './lib/sessionRecovery';
+import {
+  cacheAuthUser,
+  clearCachedAuthUser,
+  readCachedAuthUser,
+  recoverSessionUser,
+} from './lib/sessionRecovery';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 
 function SetupRequired() {
@@ -34,10 +39,14 @@ export function AuthGate() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
   const [sessionWarning, setSessionWarning] = useState(false);
-  const userRef = useRef<User | null>(null);
   const explicitLogoutRef = useRef(false);
-  const recoveryBusyRef = useRef(false);
-  userRef.current = user;
+
+  function adoptUser(next: User | null) {
+    if (!next) return;
+    setUser(next);
+    cacheAuthUser(next);
+    setSessionWarning(false);
+  }
 
   useEffect(() => {
     if (!supabase) {
@@ -47,56 +56,32 @@ export function AuthGate() {
 
     let cancelled = false;
 
-    async function tryRecoverSession(): Promise<User | null> {
-      if (recoveryBusyRef.current) return userRef.current;
-      recoveryBusyRef.current = true;
-      setSessionWarning(true);
-      try {
-        return await recoverSessionUser(supabase!, { attempts: 6, delayMs: 2500 });
-      } finally {
-        recoveryBusyRef.current = false;
-        if (!cancelled) setSessionWarning(false);
-      }
-    }
-
     async function bootstrap() {
-      const recovered = await recoverSessionUser(supabase!, { attempts: 5, delayMs: 2000 });
-      if (!cancelled) {
-        setUser(recovered);
-        setChecking(false);
+      const recovered = await recoverSessionUser(supabase!, {
+        attempts: 6,
+        delayMs: 2000,
+        patient: true,
+      });
+      if (cancelled) return;
+
+      if (recovered) {
+        adoptUser(recovered);
+      } else {
+        const cached = readCachedAuthUser();
+        if (cached) {
+          setUser(cached);
+          setSessionWarning(true);
+        }
       }
+      setChecking(false);
     }
 
     void bootstrap();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (explicitLogoutRef.current) return;
-
-      if (session?.user) {
-        setUser(session.user);
-        setSessionWarning(false);
-        return;
-      }
-
-      const hadUser = userRef.current !== null;
-      if (!hadUser) {
-        setUser(null);
-        return;
-      }
-
-      // ابقَ داخل التطبيق — لا تسجّل خروج فوراً على الشبكات البطيئة
-      void tryRecoverSession().then(recovered => {
-        if (cancelled || explicitLogoutRef.current) return;
-        if (recovered) {
-          setUser(recovered);
-          return;
-        }
-        if (event === 'SIGNED_OUT') {
-          void recoverSessionUser(supabase!, { attempts: 4, delayMs: 3000 }).then(secondTry => {
-            if (!cancelled && !explicitLogoutRef.current) setUser(secondTry);
-          });
-        }
-      });
+      if (session?.user) adoptUser(session.user);
+      // لا تسجّل خروج تلقائي — أحداث Supabase الوهمية شائعة على شبكات بطيئة
     });
 
     return () => {
@@ -108,6 +93,7 @@ export function AuthGate() {
   async function handleLogout() {
     explicitLogoutRef.current = true;
     if (supabase) await supabase.auth.signOut();
+    clearCachedAuthUser();
     setUser(null);
     setSessionWarning(false);
     explicitLogoutRef.current = false;
@@ -122,9 +108,7 @@ export function AuthGate() {
   if (!user) {
     return (
       <LoginScreen
-        onSuccess={() => {
-          void recoverSessionUser(supabase!, { attempts: 3, delayMs: 800 }).then(setUser);
-        }}
+        onSuccess={adoptUser}
       />
     );
   }
@@ -134,7 +118,7 @@ export function AuthGate() {
       {sessionWarning && (
         <div className="fixed inset-x-0 top-0 z-[100] flex items-center justify-center gap-2 bg-slate-900/95 px-4 py-2 text-xs text-amber-300 shadow-lg">
           <Loader2 size={14} className="animate-spin" />
-          جاري استعادة الاتصال — انتظر قليلاً
+          اتصال ضعيف — جاري استعادة الجلسة
         </div>
       )}
       <App user={user} onLogout={handleLogout} />

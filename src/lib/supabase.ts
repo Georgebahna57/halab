@@ -10,8 +10,9 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: false,
         storage: localStorage,
+        storageKey: 'halab-auth-v1',
       },
     })
   : null;
