@@ -27,8 +27,28 @@ export const BOX_FUNDS: Fund[] = FUNDS.filter(f => f.id !== CENTERS_FUND_ID);
 
 export const DEFAULT_FUND_ID: FundId = 'steelMax';
 
-export function getFund(id: FundId) {
-  return FUNDS.find(f => f.id === id) ?? FUNDS[0];
+/** الكوة الرئيسية — فيها أرصدة كل العملات */
+export const TREASURY_FUND_ID: FundId = 'treasury';
+
+export const TREASURY_FUND: Fund = {
+  id: TREASURY_FUND_ID,
+  name: 'الخزنة',
+  shortName: 'الخزنة',
+  accent: '#f59e0b',
+};
+
+/** كوات الموظفين تُسجَّل وقت التشغيل حتى تظهر أسماؤها في الحركات */
+const dynamicFunds: Fund[] = [];
+
+export function setDynamicFunds(funds: Fund[]) {
+  dynamicFunds.splice(0, dynamicFunds.length, ...funds);
+}
+
+export function getFund(id: FundId): Fund {
+  return dynamicFunds.find(f => f.id === id)
+    ?? (id === TREASURY_FUND_ID ? TREASURY_FUND : undefined)
+    ?? FUNDS.find(f => f.id === id)
+    ?? { id, name: id, shortName: id, accent: '#94a3b8' };
 }
 
 export function isBoxFund(fundId: FundId): boolean {
@@ -95,7 +115,9 @@ const FUND_ACCOUNT_NAMES = new Set(
 );
 
 export function isFundAccountName(name: string): boolean {
-  return FUND_ACCOUNT_NAMES.has(name.trim());
+  const trimmed = name.trim();
+  if (FUND_ACCOUNT_NAMES.has(trimmed) || trimmed === TREASURY_FUND.name) return true;
+  return dynamicFunds.some(f => f.name === trimmed || f.shortName === trimmed);
 }
 
 export const CURRENCIES: AssetConfig[] = [

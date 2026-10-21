@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, BookOpen, Clock, Eye, FileText, Info, Loader2, LogOut, ScrollText, Search, Settings, Share2, Users, Wallet, X, Download } from 'lucide-react';
+import { CheckCircle2, BookOpen, Clock, Eye, FileText, Info, Landmark, Loader2, LogOut, ScrollText, Search, Settings, Share2, Users, Wallet, X, Download } from 'lucide-react';
 import { BalanceCards } from './components/BalanceCards';
 import { BillsPanel } from './components/BillsPanel';
 import { AccountsSection } from './components/AccountsSection';
@@ -13,6 +13,7 @@ import { TransactionFiltersBar, hasActiveTransactionFilters } from './components
 import { TransactionForm } from './components/TransactionForm';
 import { TransactionList } from './components/TransactionList';
 import { AdminPanel } from './components/AdminPanel';
+import { ShopDesk } from './components/ShopDesk';
 import { ApproveAllPendingModal } from './components/ApproveAllPendingModal';
 import { ApproveTransactionModal } from './components/ApproveTransactionModal';
 import { BalanceShareImageModal } from './components/BalanceShareImageModal';
@@ -87,6 +88,7 @@ const FUND_VIEWS: { id: ViewId; label: string; icon: typeof Wallet }[] = [
 ];
 
 const APP_SECTIONS: { id: AppSectionId; label: string; icon: typeof Wallet }[] = [
+  { id: 'desk', label: 'الكوة', icon: Landmark },
   { id: 'funds', label: 'الصناديق', icon: Wallet },
   { id: 'accounts', label: 'حسابات', icon: Users },
 ];
@@ -100,7 +102,7 @@ export default function App({ user, onLogout }: Props) {
   const initialPrefs = loadUiPrefs();
   const [showAdmin, setShowAdmin] = useState(false);
   const [appSection, setAppSection] = useState<AppSectionId>(
-    initialPrefs.nav.appSection ?? 'funds',
+    initialPrefs.nav.appSection === 'accounts' ? 'accounts' : 'desk',
   );
   const [fundId, setFundId] = useState<FundId>(initialPrefs.nav.fundId ?? 'steelMax');
   const [view, setView] = useState<ViewId>(initialPrefs.nav.view ?? 'ledger');
@@ -232,10 +234,12 @@ export default function App({ user, onLogout }: Props) {
   );
 
   const visibleSections = useMemo(
-    () => APP_SECTIONS.filter(s => (
-      s.id === 'funds' ? visibleBoxFunds.length > 0 : canAccessAccountsSection
-    )),
-    [visibleBoxFunds.length, canAccessAccountsSection],
+    () => APP_SECTIONS.filter(s => {
+      if (s.id === 'desk') return isAdmin || !accountsOnly;
+      if (s.id === 'funds') return visibleBoxFunds.length > 0;
+      return canAccessAccountsSection;
+    }),
+    [visibleBoxFunds.length, canAccessAccountsSection, isAdmin, accountsOnly],
   );
 
   useEffect(() => {
@@ -243,19 +247,17 @@ export default function App({ user, onLogout }: Props) {
     navRestoredRef.current = true;
     const prefs = loadUiPrefs().nav;
 
-    if (accountsOnly || visibleBoxFunds.length === 0) {
+    if (accountsOnly && !isAdmin) {
       if (canAccessAccountsSection) setAppSection('accounts');
-    } else if (prefs.appSection === 'accounts' && canAccessAccountsSection) {
-      setAppSection('accounts');
-    } else if (prefs.appSection === 'funds') {
-      setAppSection('funds');
+    } else {
+      setAppSection('desk');
     }
 
     if (prefs.fundId && visibleBoxFunds.some(f => f.id === prefs.fundId)) {
       setFundId(prefs.fundId);
     }
     if (prefs.view) setView(prefs.view);
-  }, [permsLoading, accountsOnly, visibleBoxFunds, canAccessAccountsSection]);
+  }, [permsLoading, accountsOnly, isAdmin, visibleBoxFunds, canAccessAccountsSection]);
 
   useEffect(() => {
     setPendingQuery('');
@@ -665,6 +667,20 @@ export default function App({ user, onLogout }: Props) {
           );
         })}
       </nav>
+
+      {appSection === 'desk' && (
+        <ShopDesk
+          isAdmin={isAdmin}
+          userId={user.id}
+          displayName={actorName}
+          profiles={teamMembers}
+          transactions={state.transactions}
+          customers={state.customers}
+          onAddTransactions={addTransaction}
+          onAddCustomer={addCustomer}
+          onDeleteCustomer={deleteCustomer}
+        />
+      )}
 
       <section className="mb-4">
         {appSection === 'funds' && (

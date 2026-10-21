@@ -1,4 +1,11 @@
-export type FundId = 'steelMax' | 'georgeAbuAyyoun' | 'halabJadida' | 'moneyOut' | 'marakiz';
+export type FundId =
+  | 'steelMax'
+  | 'georgeAbuAyyoun'
+  | 'halabJadida'
+  | 'moneyOut'
+  | 'marakiz'
+  | 'treasury'
+  | (string & {});
 
 export type Currency =
   | 'USD'
@@ -193,7 +200,7 @@ export interface AppState {
 export type ViewId = 'ledger' | 'pending' | 'customers' | 'bills';
 
 /** القسم الرئيسي: عمليات الصناديق أو حسابات ومطابقات */
-export type AppSectionId = 'funds' | 'accounts';
+export type AppSectionId = 'desk' | 'funds' | 'accounts';
 
 /** فرع الحسابات: مراكز أو زبائن */
 export type AccountBranchId = 'centers' | 'customers';
