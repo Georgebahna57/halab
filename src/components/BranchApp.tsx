@@ -3,22 +3,17 @@ import { Landmark, Loader2, LogOut, Settings } from 'lucide-react';
 import { CURRENCIES, TREASURY_FUND_ID, getCurrencyLabel, getCurrencySymbol } from '../config';
 import {
   TREASURY_WINDOW,
-  WINDOW_CAPABILITIES,
   fetchCashWindows,
-  grantWindowAccess,
-  saveCashWindows,
   type CashWindow,
   type WindowCapability,
 } from '../lib/cashWindows';
 import {
   TRADE_CURRENCIES,
   fetchExchangeBoard,
-  saveExchangeBoard,
   type ExchangeBoard,
 } from '../lib/exchangeBoard';
 import {
   fetchBranchMaster,
-  saveBranchMaster,
   type BranchCompany,
   type BranchMaster,
   type ShamAccount,
@@ -45,15 +40,13 @@ import {
 } from '../lib/branchModel';
 import { balanceOf } from '../lib/deskOps';
 import { logAudit } from '../lib/auditLog';
-import type { UserProfile } from '../lib/permissions';
-import { computeBalances, createCustomer, formatAmount } from '../lib/utils';
+import { computeBalances, formatAmount } from '../lib/utils';
 import type { Currency, Customer, Transaction } from '../types';
 
 interface Props {
   isAdmin: boolean;
   userId: string;
   displayName: string;
-  profiles: UserProfile[];
   transactions: Transaction[];
   customers: Customer[];
   onAddTransactions: (tx: Transaction | Transaction[]) => Promise<void>;
@@ -65,7 +58,7 @@ interface Props {
   embedded?: boolean;
 }
 
-type SectionId = 'daily' | 'treasury' | 'shifts' | 'exchange' | 'remittance' | 'sham' | 'companies' | 'inventory' | 'reports' | 'setup';
+type SectionId = 'daily' | 'treasury' | 'shifts' | 'exchange' | 'remittance' | 'sham' | 'companies' | 'inventory' | 'reports';
 
 interface ReceiptView {
   title: string;
@@ -159,7 +152,6 @@ export function BranchApp(props: Props) {
     { id: 'companies', label: 'الشركات' },
     { id: 'inventory', label: 'الجرد' },
     { id: 'reports', label: 'التقارير' },
-    { id: 'setup', label: 'الإعداد', admin: true },
   ];
 
   function allowed(cap: WindowCapability) {
@@ -248,7 +240,7 @@ export function BranchApp(props: Props) {
         ))}
       </nav>
 
-      {props.isAdmin && section !== 'setup' && section !== 'treasury' && section !== 'reports' && (
+      {props.isAdmin && section !== 'treasury' && section !== 'reports' && (
         <label className="mb-4 block text-xs text-slate-400">
           الكوة العاملة
           <select value={deskId} onChange={event => setDeskId(event.target.value)} className={`${fieldClass} mt-1`}>
@@ -608,53 +600,6 @@ export function BranchApp(props: Props) {
       {section === 'reports' && (
         <ReportsSection ops={ops} windows={employees} companies={master.companies} accounts={master.shamAccounts} transactions={props.transactions} />
       )}
-      {section === 'setup' && props.isAdmin && (
-        <SetupSection
-          windows={employees}
-          profiles={props.profiles}
-          board={board}
-          master={master}
-          customers={props.customers.filter(customer => customer.fundId === TREASURY_FUND_ID)}
-          busy={busy}
-          onSaveWindow={(window, previousUserId) => run(async () => {
-            const next = [TREASURY_WINDOW, ...employees.filter(item => item.id !== window.id), window];
-            await saveCashWindows(next);
-            setWindows(next);
-            await grantWindowAccess(window, previousUserId);
-          }, 'تم حفظ الكوة')}
-          onDeleteWindow={(window) => run(async () => {
-            const next = [TREASURY_WINDOW, ...employees.filter(item => item.id !== window.id)];
-            await saveCashWindows(next);
-            setWindows(next);
-          }, 'تم حذف الكوة')}
-          onSaveBoard={async (next) => run(async () => {
-            const history = [{ at: new Date().toISOString(), by: props.displayName, board }, ...master.rateHistory].slice(0, 30);
-            await saveExchangeBoard(next);
-            const saved = { ...master, rateHistory: history };
-            await saveBranchMaster(saved);
-            setBoard(next);
-            setMaster(saved);
-            void logAudit({
-              userId: props.userId,
-              userName: props.displayName,
-              action: 'transaction_edit',
-              entityType: 'rates',
-              details: 'تحديث أسعار الصرافة مع حفظ السعر السابق',
-            });
-          }, 'تم حفظ الأسعار')}
-          onSaveMaster={(next) => run(async () => {
-            await saveBranchMaster(next);
-            setMaster(next);
-          }, 'تم حفظ الإعداد')}
-          onAddCustomer={(name, phone) => run(async () => {
-            await props.onAddCustomer(createCustomer({ fundId: TREASURY_FUND_ID, name, phone }));
-          }, 'تم تعريف العميل')}
-          onDeleteCustomer={(id) => run(async () => {
-            await props.onDeleteCustomer(id);
-          }, 'تم حذف العميل')}
-        />
-      )}
-
       {receipt && (
         <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/60 p-4 sm:items-center">
           <div className="w-full max-w-md rounded-2xl bg-slate-900 p-4">
@@ -715,7 +660,7 @@ function DailySection({
         ))}
       </ul>
       <p className="text-xs text-slate-500">
-        {window ? `الكوة: ${window.name}` : isAdmin ? 'اختر كوة عاملة من الأعلى.' : 'ما في كوة مربوطة بحسابك.'}
+        {window ? `الكوة: ${window.name}` : isAdmin ? 'اختر كوة عاملة من الأعلى. الكوات والأسعار والشركات من زر الإدارة.' : 'ما في كوة مربوطة بحسابك.'}
         {shift?.op.openedAt ? ` — فُتحت ${new Date(shift.op.openedAt).toLocaleString('ar')}` : ''}
       </p>
       {balances && <BalanceGrid balances={balances} />}
@@ -1348,172 +1293,3 @@ function ReportsSection({
   );
 }
 
-function SetupSection({
-  windows,
-  profiles,
-  board,
-  master,
-  customers,
-  busy,
-  onSaveWindow,
-  onDeleteWindow,
-  onSaveBoard,
-  onSaveMaster,
-  onAddCustomer,
-  onDeleteCustomer,
-}: {
-  windows: CashWindow[];
-  profiles: UserProfile[];
-  board: ExchangeBoard;
-  master: BranchMaster;
-  customers: Customer[];
-  busy: boolean;
-  onSaveWindow: (window: CashWindow, previousUserId?: string | null) => void;
-  onDeleteWindow: (window: CashWindow) => void;
-  onSaveBoard: (board: ExchangeBoard) => void;
-  onSaveMaster: (master: BranchMaster) => void;
-  onAddCustomer: (name: string, phone: string) => void;
-  onDeleteCustomer: (id: string) => void;
-}) {
-  const [name, setName] = useState('');
-  const [userId, setUserId] = useState('');
-  const [caps, setCaps] = useState<WindowCapability[]>(['exchange', 'remittance']);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [companyName, setCompanyName] = useState('');
-  const [shamName, setShamName] = useState('');
-  const [shamOwner, setShamOwner] = useState('');
-  const [shamCurrency, setShamCurrency] = useState<Currency>('USD');
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [draft, setDraft] = useState(board);
-
-  useEffect(() => setDraft(board), [board]);
-
-  function toggle(id: WindowCapability) {
-    setCaps(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
-  }
-
-  return (
-    <section className="space-y-6">
-      <div className="space-y-2">
-        <h2 className="font-semibold">الكوات والموظفون</h2>
-        <input value={name} onChange={event => setName(event.target.value)} placeholder="اسم الموظف / الكوة" className={fieldClass} />
-        <select value={userId} onChange={event => setUserId(event.target.value)} className={fieldClass}>
-          <option value="">بدون حساب دخول</option>
-          {profiles.filter(profile => !profile.isAdmin).map(profile => (
-            <option key={profile.id} value={profile.id}>{profile.displayName}</option>
-          ))}
-        </select>
-        <div className="space-y-1">
-          {WINDOW_CAPABILITIES.map(item => (
-            <label key={item.id} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={caps.includes(item.id)} onChange={() => toggle(item.id)} />
-              {item.label}
-            </label>
-          ))}
-        </div>
-        <button
-          type="button"
-          disabled={busy || !name.trim()}
-          onClick={() => {
-            const previous = windows.find(window => window.id === editing);
-            onSaveWindow({
-              id: previous?.id ?? `win_${crypto.randomUUID()}`,
-              name: name.trim(),
-              kind: 'employee',
-              employeeName: name.trim(),
-              userId: userId || null,
-              capabilities: caps,
-            }, previous?.userId);
-            setName('');
-            setUserId('');
-            setEditing(null);
-          }}
-          className="w-full rounded-xl bg-amber-500 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
-        >
-          {editing ? 'حفظ الكوة' : 'إنشاء كوة'}
-        </button>
-        <ul className="space-y-1 text-sm">
-          {windows.map(window => (
-            <li key={window.id} className="flex items-center justify-between rounded-lg bg-slate-900/50 px-3 py-2">
-              <span>{window.name}</span>
-              <span className="flex gap-2 text-xs">
-                <button type="button" onClick={() => { setEditing(window.id); setName(window.name); setUserId(window.userId || ''); setCaps(window.capabilities); }}>تعديل</button>
-                <button type="button" onClick={() => onDeleteWindow(window)} className="text-rose-300">حذف</button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="space-y-2">
-        <h2 className="font-semibold">أسعار الشراء والمبيع</h2>
-        {TRADE_CURRENCIES.filter(currency => currency !== 'SYP').map(currency => (
-          <div key={currency} className="grid grid-cols-3 items-center gap-2 text-xs">
-            <span>{getCurrencyLabel(currency)} / ليرة</span>
-            <input value={draft.againstSyp[currency]?.buy || ''} onChange={event => setDraft(prev => ({ ...prev, againstSyp: { ...prev.againstSyp, [currency]: { buy: Number(event.target.value) || 0, sell: prev.againstSyp[currency]?.sell ?? 0 } } }))} placeholder="شراء" className={fieldClass} />
-            <input value={draft.againstSyp[currency]?.sell || ''} onChange={event => setDraft(prev => ({ ...prev, againstSyp: { ...prev.againstSyp, [currency]: { sell: Number(event.target.value) || 0, buy: prev.againstSyp[currency]?.buy ?? 0 } } }))} placeholder="مبيع" className={fieldClass} />
-          </div>
-        ))}
-        {TRADE_CURRENCIES.filter(currency => currency !== 'SYP' && currency !== 'USD').map(currency => (
-          <div key={`${currency}-usd`} className="grid grid-cols-3 items-center gap-2 text-xs">
-            <span>{getCurrencyLabel(currency)} / دولار</span>
-            <input value={draft.againstUsd[currency]?.buy || ''} onChange={event => setDraft(prev => ({ ...prev, againstUsd: { ...prev.againstUsd, [currency]: { buy: Number(event.target.value) || 0, sell: prev.againstUsd[currency]?.sell ?? 0 } } }))} placeholder="شراء" className={fieldClass} />
-            <input value={draft.againstUsd[currency]?.sell || ''} onChange={event => setDraft(prev => ({ ...prev, againstUsd: { ...prev.againstUsd, [currency]: { sell: Number(event.target.value) || 0, buy: prev.againstUsd[currency]?.buy ?? 0 } } }))} placeholder="مبيع" className={fieldClass} />
-          </div>
-        ))}
-        <button type="button" disabled={busy} onClick={() => onSaveBoard(draft)} className="w-full rounded-xl bg-amber-500 py-2 text-sm font-semibold text-slate-950">حفظ الأسعار</button>
-        {master.rateHistory[0] && <p className="text-[11px] text-slate-500">آخر تحديث محفوظ: {new Date(master.rateHistory[0].at).toLocaleString('ar')} — {master.rateHistory[0].by}</p>}
-      </div>
-
-      <div className="space-y-2">
-        <h2 className="font-semibold">شركات الحوالات</h2>
-        <form className="flex gap-2" onSubmit={event => { event.preventDefault(); if (!companyName.trim()) return; onSaveMaster({ ...master, companies: [...master.companies, { id: crypto.randomUUID(), name: companyName.trim() }] }); setCompanyName(''); }}>
-          <input value={companyName} onChange={event => setCompanyName(event.target.value)} placeholder="اسم الشركة" className={fieldClass} />
-          <button className="rounded-xl bg-slate-200 px-3 text-sm text-slate-950">إضافة</button>
-        </form>
-        {master.companies.map(company => (
-          <p key={company.id} className="flex justify-between text-sm"><span>{company.name}</span><button type="button" className="text-rose-300" onClick={() => onSaveMaster({ ...master, companies: master.companies.filter(item => item.id !== company.id) })}>حذف</button></p>
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        <h2 className="font-semibold">حسابات شام كاش</h2>
-        <input value={shamName} onChange={event => setShamName(event.target.value)} placeholder="اسم الحساب" className={fieldClass} />
-        <input value={shamOwner} onChange={event => setShamOwner(event.target.value)} placeholder="المالك" className={fieldClass} />
-        <select value={shamCurrency} onChange={event => setShamCurrency(event.target.value as Currency)} className={fieldClass}>{currencyOptions(TRADE_CURRENCIES)}</select>
-        <button
-          type="button"
-          disabled={!shamName.trim()}
-          onClick={() => {
-            const account: ShamAccount = { id: crypto.randomUUID(), name: shamName.trim(), owner: shamOwner.trim() || shamName.trim(), currency: shamCurrency, active: true };
-            onSaveMaster({ ...master, shamAccounts: [...master.shamAccounts, account] });
-            setShamName('');
-            setShamOwner('');
-          }}
-          className="w-full rounded-xl bg-sky-500 py-2 text-sm font-semibold text-slate-950"
-        >
-          إضافة الحساب
-        </button>
-        {master.shamAccounts.map(account => (
-          <p key={account.id} className="flex justify-between text-sm">
-            <span>{account.name} — {account.owner} — {account.currency}</span>
-            <button type="button" className="text-rose-300" onClick={() => onSaveMaster({ ...master, shamAccounts: master.shamAccounts.filter(item => item.id !== account.id) })}>حذف</button>
-          </p>
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        <h2 className="font-semibold">العملاء</h2>
-        <form className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={event => { event.preventDefault(); if (!customerName.trim() || !customerPhone.trim()) return; onAddCustomer(customerName.trim(), customerPhone.trim()); setCustomerName(''); setCustomerPhone(''); }}>
-          <input value={customerName} onChange={event => setCustomerName(event.target.value)} placeholder="الاسم" className={fieldClass} />
-          <input value={customerPhone} onChange={event => setCustomerPhone(event.target.value)} placeholder="الهاتف" dir="ltr" className={fieldClass} />
-          <button className="rounded-xl bg-slate-200 px-3 text-sm text-slate-950">إضافة</button>
-        </form>
-        {customers.map(customer => (
-          <p key={customer.id} className="flex justify-between text-sm"><span>{customer.name} — {customer.phone}</span><button type="button" className="text-rose-300" onClick={() => onDeleteCustomer(customer.id)}>حذف</button></p>
-        ))}
-      </div>
-    </section>
-  );
-}

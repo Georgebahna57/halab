@@ -48,7 +48,7 @@ import {
 import type { AppSectionId, FundId, TransactionFilters, ViewId } from './types';
 import type { User } from '@supabase/supabase-js';
 import { fetchFundWhatsAppPhones, type FundWhatsAppMap } from './lib/fundSettings';
-import { fetchValuationRates, saveValuationRates } from './lib/appSettings';
+import { fetchValuationRates } from './lib/appSettings';
 import type { ValuationRates } from './lib/valuationRates';
 import { loadValuationRatesLocal } from './lib/valuationRates';
 import { saveDailyCloudBackup } from './lib/cloudBackup';
@@ -127,7 +127,6 @@ export default function App({ user, onLogout }: Props) {
   } | null>(null);
   const [teamMembers, setTeamMembers] = useState<UserProfile[]>([]);
   const [valuationRates, setValuationRates] = useState<ValuationRates>(() => loadValuationRatesLocal());
-  const [savingValuationRates, setSavingValuationRates] = useState(false);
   const [dailyJournalOpen, setDailyJournalOpen] = useState(false);
   const [fundDetailsOpen, setFundDetailsOpen] = useState(false);
   const [pendingQuery, setPendingQuery] = useState('');
@@ -170,8 +169,6 @@ export default function App({ user, onLogout }: Props) {
     claimTransaction,
     releaseClaim,
     restoreBackup,
-    repairHalabData,
-    importTrialBalance,
     remoteNotice,
     clearRemoteNotice,
   } = useCloudStore(true, user.email ? {
@@ -453,33 +450,19 @@ export default function App({ user, onLogout }: Props) {
     setApprovingTxId(null);
   }
 
-  async function handleSaveValuationRates(rates: ValuationRates) {
-    setSavingValuationRates(true);
-    try {
-      await saveValuationRates(rates);
-      setValuationRates(rates);
-    } finally {
-      setSavingValuationRates(false);
-    }
-  }
-
   if (showAdmin && isAdmin) {
     return (
       <AdminPanel
         onBack={() => setShowAdmin(false)}
-        onWhatsAppSaved={() => fetchFundWhatsAppPhones().then(setFundWhatsApp)}
+        displayName={actorName}
         valuationRates={valuationRates}
-        onSaveValuationRates={handleSaveValuationRates}
-        savingValuationRates={savingValuationRates}
         appState={state}
         onRestoreBackup={async (backup, mode) => {
           await restoreBackup(backup, mode);
           if (backup.valuationRates) setValuationRates(backup.valuationRates);
         }}
-        onAddOpeningBalance={addTransaction}
-        onRepairHalab={repairHalabData}
-        onImportTrialBalance={importTrialBalance}
-        importingTrialBalance={syncing}
+        onAddCustomer={addCustomer}
+        onDeleteCustomer={deleteCustomer}
       />
     );
   }
@@ -599,7 +582,6 @@ export default function App({ user, onLogout }: Props) {
           isAdmin={isAdmin}
           userId={user.id}
           displayName={actorName}
-          profiles={teamMembers}
           transactions={state.transactions}
           customers={state.customers}
           onAddTransactions={addTransaction}
