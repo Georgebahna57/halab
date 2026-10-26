@@ -45,8 +45,8 @@ function resolveTransactionLedger(
   rowLedger: unknown,
   decodedLedger?: TransactionLedger,
 ): TransactionLedger {
-  if (decodedLedger === 'account') return 'account';
-  if (rowLedger === 'account' || rowLedger === 'fund') return rowLedger;
+  if (decodedLedger === 'account' || decodedLedger === 'ops') return decodedLedger;
+  if (rowLedger === 'account' || rowLedger === 'fund' || rowLedger === 'ops') return rowLedger;
   return decodedLedger ?? 'fund';
 }
 

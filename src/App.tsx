@@ -14,6 +14,7 @@ import { TransactionForm } from './components/TransactionForm';
 import { TransactionList } from './components/TransactionList';
 import { AdminPanel } from './components/AdminPanel';
 import { ShopDesk } from './components/ShopDesk';
+import { BranchApp } from './components/BranchApp';
 import { ApproveAllPendingModal } from './components/ApproveAllPendingModal';
 import { ApproveTransactionModal } from './components/ApproveTransactionModal';
 import { BalanceShareImageModal } from './components/BalanceShareImageModal';
@@ -101,6 +102,7 @@ interface Props {
 export default function App({ user, onLogout }: Props) {
   const initialPrefs = loadUiPrefs();
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showLegacy, setShowLegacy] = useState(false);
   const [appSection, setAppSection] = useState<AppSectionId>(
     initialPrefs.nav.appSection === 'accounts' ? 'accounts' : 'desk',
   );
@@ -551,6 +553,26 @@ export default function App({ user, onLogout }: Props) {
   }
   initialLoadDoneRef.current = true;
 
+  if (!showLegacy) {
+    return (
+      <BranchApp
+        isAdmin={isAdmin}
+        userId={user.id}
+        displayName={actorName}
+        profiles={teamMembers}
+        transactions={state.transactions}
+        customers={state.customers}
+        onAddTransactions={addTransaction}
+        onUpdateTransaction={updateTransaction}
+        onAddCustomer={addCustomer}
+        onDeleteCustomer={deleteCustomer}
+        onLogout={onLogout}
+        onOpenLegacy={() => setShowLegacy(true)}
+        onOpenAdmin={() => setShowAdmin(true)}
+      />
+    );
+  }
+
   if (visibleBoxFunds.length === 0 && !canAccessAccountsSection) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-sm flex-col items-center justify-center px-4 text-center">
@@ -586,6 +608,15 @@ export default function App({ user, onLogout }: Props) {
               onPendingNotifyChange={setPendingNotify}
               onRemoteNotifyChange={setRemoteNotify}
             />
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowLegacy(false)}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:text-amber-400"
+              >
+                نظام الفرع
+              </button>
+            )}
             {isAdmin && (
               <button
                 type="button"

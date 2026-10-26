@@ -125,7 +125,7 @@ export function normalizeTransaction(tx: Transaction): Transaction {
   const base = intermediary !== tx.intermediary || withFee.fee !== tx.fee || withFee.extraFee !== tx.extraFee
     ? withFee
     : tx;
-  if (base.ledger === 'account') return base;
+  if (base.ledger === 'account' || base.ledger === 'ops') return base;
 
   const ledger = base.ledger ?? 'fund';
   if (ledger === 'fund') {

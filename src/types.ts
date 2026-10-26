@@ -25,7 +25,7 @@ export type Currency =
 
 export type TransactionStatus = 'posted' | 'pending';
 export type TransactionKind = 'receipt' | 'payment' | 'exchange';
-export type TransactionLedger = 'fund' | 'account';
+export type TransactionLedger = 'fund' | 'account' | 'ops';
 export type FeeMode = 'fixed' | 'percent' | 'per_mille';
 export type FeeSide = 'ours' | 'customer';
 

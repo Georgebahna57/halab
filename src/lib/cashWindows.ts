@@ -6,6 +6,7 @@ export const WINDOW_CAPABILITIES = [
   { id: 'exchange', label: 'صرافة' },
   { id: 'remittance', label: 'حوالات' },
   { id: 'receiveDeliver', label: 'استلام وتسليم (مدفوعات ومقبوضات)' },
+  { id: 'sham', label: 'شام كاش' },
   { id: 'feedFund', label: 'تغذية صندوق' },
   { id: 'feedTreasury', label: 'تغذية خزنة (إعادة الفائض)' },
 ] as const;
