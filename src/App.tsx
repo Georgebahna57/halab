@@ -34,7 +34,6 @@ import { usePermissions } from './hooks/usePermissions';
 import {
   applyTransactionFilters,
   accountNeedsReconciliation,
-  countAccountsNeedingReconciliation,
   computeBalances,
   computeProjectedFundBalances,
   describeTransaction,
@@ -88,12 +87,6 @@ const FUND_VIEWS: { id: ViewId; label: string; icon: typeof Wallet }[] = [
   { id: 'bills', label: 'فواتير', icon: FileText },
 ];
 
-const APP_SECTIONS: { id: AppSectionId; label: string; icon: typeof Wallet }[] = [
-  { id: 'desk', label: 'الكوة', icon: Landmark },
-  { id: 'funds', label: 'الصناديق', icon: Wallet },
-  { id: 'accounts', label: 'حسابات', icon: Users },
-];
-
 interface Props {
   user: User;
   onLogout: () => void;
@@ -102,10 +95,8 @@ interface Props {
 export default function App({ user, onLogout }: Props) {
   const initialPrefs = loadUiPrefs();
   const [showAdmin, setShowAdmin] = useState(false);
-  const [showLegacy, setShowLegacy] = useState(false);
-  const [appSection, setAppSection] = useState<AppSectionId>(
-    initialPrefs.nav.appSection === 'accounts' ? 'accounts' : 'desk',
-  );
+  const [homeView, setHomeView] = useState<'desk' | 'branch'>('desk');
+  const [appSection, setAppSection] = useState<AppSectionId>('desk');
   const [fundId, setFundId] = useState<FundId>(initialPrefs.nav.fundId ?? 'steelMax');
   const [view, setView] = useState<ViewId>(initialPrefs.nav.view ?? 'ledger');
   const [displayMode, setDisplayMode] = useState<DisplayMode>(initialPrefs.displayMode);
@@ -235,25 +226,12 @@ export default function App({ user, onLogout }: Props) {
     [accountBoxFunds],
   );
 
-  const visibleSections = useMemo(
-    () => APP_SECTIONS.filter(s => {
-      if (s.id === 'desk') return isAdmin || !accountsOnly;
-      if (s.id === 'funds') return visibleBoxFunds.length > 0;
-      return canAccessAccountsSection;
-    }),
-    [visibleBoxFunds.length, canAccessAccountsSection, isAdmin, accountsOnly],
-  );
-
   useEffect(() => {
     if (permsLoading || navRestoredRef.current) return;
     navRestoredRef.current = true;
     const prefs = loadUiPrefs().nav;
 
-    if (accountsOnly && !isAdmin) {
-      if (canAccessAccountsSection) setAppSection('accounts');
-    } else {
-      setAppSection('desk');
-    }
+    setAppSection('desk');
 
     if (prefs.fundId && visibleBoxFunds.some(f => f.id === prefs.fundId)) {
       setFundId(prefs.fundId);
@@ -348,16 +326,6 @@ export default function App({ user, onLogout }: Props) {
     [fundAccountSummaries, state.transactions, fundId],
   );
 
-  const accountsNeedingReconciliation = useMemo(
-    () => countAccountsNeedingReconciliation(
-      state.transactions,
-      state.customers,
-      accountBoxFunds.map(f => f.id),
-      canAccessCenters,
-    ),
-    [state.transactions, state.customers, accountBoxFunds, canAccessCenters],
-  );
-
   const accountNames = useMemo(
     () => fundAccountSummaries
       .map(s => s.name)
@@ -385,34 +353,8 @@ export default function App({ user, onLogout }: Props) {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-
       if (e.key === 'Escape') {
         closeAllModals();
-        return;
-      }
-
-      if (typing || showAdmin) return;
-
-      if (e.key === 'p' || e.key === 'P') {
-        if (visibleBoxFunds.length > 0) {
-          setAppSection('funds');
-          setView('pending');
-        }
-        return;
-      }
-
-      if (e.key === 'n' || e.key === 'N') {
-        if (appSection === 'funds' && (view === 'ledger' || view === 'pending') && !readOnly) {
-          setView(view === 'pending' ? 'pending' : 'ledger');
-          requestAnimationFrame(() => {
-            const el = document.getElementById('new-transaction-form');
-            el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            const input = el?.querySelector('input, select, textarea') as HTMLElement | null;
-            input?.focus();
-          });
-        }
       }
     };
 
@@ -553,37 +495,6 @@ export default function App({ user, onLogout }: Props) {
   }
   initialLoadDoneRef.current = true;
 
-  if (!showLegacy) {
-    return (
-      <BranchApp
-        isAdmin={isAdmin}
-        userId={user.id}
-        displayName={actorName}
-        profiles={teamMembers}
-        transactions={state.transactions}
-        customers={state.customers}
-        onAddTransactions={addTransaction}
-        onUpdateTransaction={updateTransaction}
-        onAddCustomer={addCustomer}
-        onDeleteCustomer={deleteCustomer}
-        onLogout={onLogout}
-        onOpenLegacy={() => setShowLegacy(true)}
-        onOpenAdmin={() => setShowAdmin(true)}
-      />
-    );
-  }
-
-  if (visibleBoxFunds.length === 0 && !canAccessAccountsSection) {
-    return (
-      <div className="mx-auto flex min-h-dvh max-w-sm flex-col items-center justify-center px-4 text-center">
-        <p className="text-lg font-semibold text-amber-400">حلب</p>
-        <p className="mt-3 text-sm text-slate-400">ما عندك صلاحية على أي صندوق.</p>
-        <p className="mt-1 text-xs text-slate-500">تواصل مع المسؤول لتفعيل حسابك.</p>
-        <button type="button" onClick={onLogout} className="mt-6 text-sm text-rose-400">خروج</button>
-      </div>
-    );
-  }
-
   return (
     <div className="app-shell mx-auto min-h-dvh max-w-3xl px-4 py-6">
       <header className="app-header mb-6">
@@ -608,15 +519,6 @@ export default function App({ user, onLogout }: Props) {
               onPendingNotifyChange={setPendingNotify}
               onRemoteNotifyChange={setRemoteNotify}
             />
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setShowLegacy(false)}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:text-amber-400"
-              >
-                نظام الفرع
-              </button>
-            )}
             {isAdmin && (
               <button
                 type="button"
@@ -668,36 +570,47 @@ export default function App({ user, onLogout }: Props) {
         )}
       </header>
 
-      <nav className="mb-4 flex gap-1 overflow-x-auto rounded-2xl border border-slate-700 bg-slate-800/50 p-1">
-        {visibleSections.map(s => {
-          const Icon = s.icon;
-          const badge = s.id === 'accounts' && accountsNeedingReconciliation > 0
-            ? accountsNeedingReconciliation
-            : s.id === 'funds' && pending.length > 0
-              ? pending.length
-              : null;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setAppSection(s.id)}
-              className={`flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                appSection === s.id ? 'bg-slate-700 text-amber-400' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Icon size={16} />
-              {s.label}
-              {badge !== null && (
-                <span className={`rounded-full px-1.5 text-[10px] text-white ${
-                  s.id === 'accounts' ? 'bg-amber-500 text-slate-900' : 'bg-rose-500'
-                }`}>
-                  {badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <nav className="mb-4 flex gap-1 rounded-2xl border border-slate-700 bg-slate-800/50 p-1">
+        <button
+          type="button"
+          onClick={() => setHomeView('desk')}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-medium ${
+            homeView === 'desk' ? 'bg-slate-700 text-amber-400' : 'text-slate-400'
+          }`}
+        >
+          <Landmark size={16} />
+          الكوة
+        </button>
+        <button
+          type="button"
+          onClick={() => setHomeView('branch')}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-medium ${
+            homeView === 'branch' ? 'bg-slate-700 text-amber-400' : 'text-slate-400'
+          }`}
+        >
+          <BookOpen size={16} />
+          نظام الفرع
+        </button>
       </nav>
+
+      {homeView === 'branch' ? (
+        <BranchApp
+          embedded
+          isAdmin={isAdmin}
+          userId={user.id}
+          displayName={actorName}
+          profiles={teamMembers}
+          transactions={state.transactions}
+          customers={state.customers}
+          onAddTransactions={addTransaction}
+          onUpdateTransaction={updateTransaction}
+          onAddCustomer={addCustomer}
+          onDeleteCustomer={deleteCustomer}
+          onLogout={onLogout}
+          onOpenAdmin={() => setShowAdmin(true)}
+        />
+      ) : (
+      <>
 
       {appSection === 'desk' && (
         <ShopDesk
@@ -1146,6 +1059,8 @@ export default function App({ user, onLogout }: Props) {
           />
         );
       })()}
+      </>
+      )}
     </div>
   );
 }

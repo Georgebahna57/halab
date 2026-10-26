@@ -61,8 +61,8 @@ interface Props {
   onAddCustomer: (customer: Customer) => Promise<void>;
   onDeleteCustomer: (id: string) => Promise<void>;
   onLogout: () => void;
-  onOpenLegacy: () => void;
   onOpenAdmin: () => void;
+  embedded?: boolean;
 }
 
 type SectionId = 'daily' | 'treasury' | 'shifts' | 'exchange' | 'remittance' | 'sham' | 'companies' | 'inventory' | 'reports' | 'setup';
@@ -204,7 +204,8 @@ export function BranchApp(props: Props) {
   }
 
   return (
-    <div className="mx-auto min-h-dvh max-w-3xl px-4 py-6">
+    <div className={props.embedded ? '' : 'mx-auto min-h-dvh max-w-3xl px-4 py-6'}>
+      {!props.embedded && (
       <header className="mb-4 flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-amber-500/20 p-3">
@@ -217,9 +218,6 @@ export function BranchApp(props: Props) {
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           {props.isAdmin && (
-            <button type="button" onClick={props.onOpenLegacy} className="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-400">السجل السابق</button>
-          )}
-          {props.isAdmin && (
             <button type="button" onClick={props.onOpenAdmin} className="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-400">
               <Settings size={14} className="inline" /> إدارة
             </button>
@@ -229,6 +227,7 @@ export function BranchApp(props: Props) {
           </button>
         </div>
       </header>
+      )}
 
       {(error || notice) && (
         <div className={`mb-3 rounded-xl px-3 py-2 text-xs ${error ? 'bg-rose-500/10 text-rose-300' : 'bg-emerald-500/10 text-emerald-300'}`}>
