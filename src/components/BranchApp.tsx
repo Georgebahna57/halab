@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Landmark, Loader2, LogOut, Settings } from 'lucide-react';
+import { Loader2, LogOut, Settings } from 'lucide-react';
+import { BrandMark } from './BrandMark';
 import { CURRENCIES, TREASURY_FUND_ID, getCurrencyLabel, getCurrencySymbol } from '../config';
 import {
   TREASURY_WINDOW,
@@ -199,15 +200,7 @@ export function BranchApp(props: Props) {
     <div className={props.embedded ? '' : 'mx-auto min-h-dvh max-w-3xl px-4 py-6'}>
       {!props.embedded && (
       <header className="mb-4 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-amber-500/20 p-3">
-            <Landmark className="text-amber-400" size={22} />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">حلب</h1>
-            <p className="text-xs text-slate-500">{props.displayName} — {props.isAdmin ? 'مسؤول الفرع' : 'موظف'}</p>
-          </div>
-        </div>
+        <BrandMark subtitle={`${props.displayName} — ${props.isAdmin ? 'مسؤول الفرع' : 'موظف'}`} />
         <div className="flex flex-wrap justify-end gap-2">
           {props.isAdmin && (
             <button type="button" onClick={props.onOpenAdmin} className="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-400">

@@ -10,11 +10,14 @@ import {
   saveStickySession,
 } from './lib/sessionRecovery';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
+import { BrandMark } from './components/BrandMark';
 
 function SetupRequired() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 text-center">
-      <h1 className="text-xl font-bold text-amber-400">حلب</h1>
+      <div className="mb-4 flex justify-center">
+        <BrandMark logoSize={88} align="center" />
+      </div>
       <p className="mt-4 text-sm text-slate-400">
         السحابة غير مُعدّة بعد. أضف مفاتيح Supabase في ملف <code className="text-amber-300">.env</code>
       </p>

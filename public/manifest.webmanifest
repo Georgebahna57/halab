@@ -1,7 +1,7 @@
 {
-  "name": "حلب",
-  "short_name": "حلب",
-  "description": "حلب — ستيل ماكس، جورج ابو عيون، موني آوت، حلب الجديدة",
+  "name": "أصول OSOUL",
+  "short_name": "OSOUL",
+  "description": "أصول OSOUL للصرافة والحوالات المالية",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
@@ -11,9 +11,9 @@
   "lang": "ar",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/osoul-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Loader2, LogIn } from 'lucide-react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { BrandMark } from './BrandMark';
 
 interface Props {
   onSuccess: (user: User) => void;
@@ -37,9 +38,8 @@ export function LoginScreen({ onSuccess }: Props) {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-4 py-8">
-      <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-amber-400">حلب</h1>
-        <p className="mt-2 text-sm text-slate-400">سجّل دخولك للمتابعة</p>
+      <div className="mb-8 flex justify-center">
+        <BrandMark logoSize={120} titleClassName="text-2xl" align="center" subtitle="سجّل دخولك للمتابعة" />
       </div>
 
       <form onSubmit={submit} className="rounded-2xl border border-slate-700 bg-slate-800/80 p-5 space-y-4">

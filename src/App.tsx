@@ -13,6 +13,7 @@ import { TransactionFiltersBar, hasActiveTransactionFilters } from './components
 import { TransactionForm } from './components/TransactionForm';
 import { TransactionList } from './components/TransactionList';
 import { AdminPanel } from './components/AdminPanel';
+import { BrandMark } from './components/BrandMark';
 import { ShopDesk } from './components/ShopDesk';
 import { BranchApp } from './components/BranchApp';
 import { ApproveAllPendingModal } from './components/ApproveAllPendingModal';
@@ -482,15 +483,7 @@ export default function App({ user, onLogout }: Props) {
     <div className="app-shell mx-auto min-h-dvh max-w-3xl px-4 py-6">
       <header className="app-header mb-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="rounded-2xl p-3" style={{ background: `${fund.accent}22` }}>
-              <BookOpen size={24} style={{ color: fund.accent }} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">حلب</h1>
-              <p className="text-xs text-slate-500">{profile?.displayName ?? user.email}</p>
-            </div>
-          </div>
+          <BrandMark subtitle={profile?.displayName ?? user.email} />
           <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
             <DisplayModeToggle
               mode={displayMode}
